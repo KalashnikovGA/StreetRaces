@@ -342,20 +342,25 @@ export class RaceScene {
       this.lastLightStep = step;
       this.options.onLights?.(step);
     }
-    const cx = w / 2;
-    const cy = this.height * 0.22;
+    // Дерево лежит горизонтально между панелью гонщиков и дорогой: вертикальное
+    // на этой ширине налезает на имя соперника.
+    const lamp = 15;
+    const spacing = lamp * 3.1;
+    const total = spacing * 3;
+    const cx = w / 2 - total / 2;
+    const cy = this.height * 0.40;
     ctx.save();
-    ctx.fillStyle = 'rgba(8,10,16,0.85)';
-    ctx.fillRect(cx - 34, cy - 100, 68, 200);
+    ctx.fillStyle = 'rgba(8,10,16,0.82)';
+    ctx.fillRect(cx - lamp * 2, cy - lamp * 1.9, total + lamp * 4, lamp * 3.8);
     for (let i = 0; i < 4; i++) {
-      const on = step >= i;
+      const on = this.lastLightStep >= i;
       const green = i === 3;
       ctx.beginPath();
-      ctx.arc(cx, cy - 66 + i * 44, 17, 0, Math.PI * 2);
+      ctx.arc(cx + i * spacing, cy, lamp, 0, Math.PI * 2);
       ctx.fillStyle = on ? (green ? '#3ddc84' : PALETTE.accent) : '#232733';
       if (on) {
         ctx.shadowColor = green ? '#3ddc84' : PALETTE.accent;
-        ctx.shadowBlur = 26;
+        ctx.shadowBlur = 24;
       }
       ctx.fill();
       ctx.shadowBlur = 0;
