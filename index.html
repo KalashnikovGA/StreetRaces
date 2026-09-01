@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>На слабо — заезд</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <h1>НА СЛАБО</h1>
+      <span class="sub">заезд</span>
+      <nav>
+        <a href="/sandbox.html">песочница баланса</a>
+      </nav>
+    </header>
+
+    <canvas class="track" id="track"></canvas>
+
+    <div class="panel">
+      <div class="row" style="align-items: center">
+        <div style="flex: 0 0 auto; display: flex; gap: 8px; align-items: center">
+          <button class="primary" id="run">СТАРТ</button>
+          <button id="again">Другой заезд</button>
+          <button id="sound">Звук: вкл</button>
+        </div>
+        <div id="verdict" class="muted" style="flex: 1 1 auto; text-align: right"></div>
+      </div>
+      <div class="share">
+        <input type="text" id="link" readonly />
+        <button id="copy">Скопировать ссылку</button>
+      </div>
+      <p class="muted" style="margin: 8px 0 0">
+        Весь заезд лежит в этой ссылке. Она открывается у кого угодно, без регистрации:
+        повтор считается той же функцией из того же сида.
+      </p>
+    </div>
+
+    <div class="row">
+      <div class="panel">
+        <h2>Расклад до старта</h2>
+        <div id="odds"></div>
+      </div>
+      <div class="panel">
+        <h2>Что произошло в заезде</h2>
+        <pre class="out" id="events"></pre>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/game/main.ts"></script>
+</body>
+</html>

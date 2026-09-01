@@ -59,18 +59,29 @@ test('победитель раскадровки — победитель бр�
     const firstToFinish = result.finishTime.a < result.finishTime.b ? 'a' : 'b';
     assert.equal(firstToFinish, result.winner);
     const last = result.frames.at(-1)!;
-    assert.ok(Math.abs(last.a.distance - result.trackLength) < 1);
-    assert.ok(Math.abs(last.b.distance - result.trackLength) < 1);
+    assert.ok(last.a.distance >= result.trackLength);
+    assert.ok(last.b.distance >= result.trackLength);
   }
 });
 
-test('заезд решается за 10–15 секунд', () => {
+test('заезд занимает на экране 10–15 секунд', () => {
   for (const distance of ['short', 'medium', 'long'] as const)
     for (let i = 0; i < 200; i++) {
       const result = race(input({ conditions: { ...DRY, distance }, seed: `dur-${distance}-${i}` }));
-      assert.ok(result.winnerTime >= 9.5 && result.winnerTime <= 15.01, `${distance}: ${result.winnerTime}`);
-      assert.ok(result.duration <= 18, `хвост слишком длинный: ${result.duration}`);
+      assert.ok(result.screenDuration >= 10 && result.screenDuration <= 15, `${distance}`);
+      // Хвост отстающего не должен растягивать просмотр больше чем на пару секунд.
+      const tailOnScreen = (result.duration - result.winnerTime) / result.playbackRate;
+      assert.ok(tailOnScreen <= 2.5, `${distance}: хвост ${tailOnScreen.toFixed(2)} с`);
     }
+});
+
+test('скорости остаются правдоподобными', () => {
+  for (const distance of ['short', 'medium', 'long'] as const) {
+    const result = race(input({ conditions: { ...DRY, distance }, seed: 'speed' }));
+    const top = Math.max(...result.frames.map((frame) => frame.a.speed));
+    assert.ok(top * 3.6 < 340, `${distance}: ${(top * 3.6).toFixed(0)} км/ч`);
+    assert.ok(top * 3.6 > 90, `${distance}: ${(top * 3.6).toFixed(0)} км/ч`);
+  }
 });
 
 test('дистанция проходится монотонно', () => {
@@ -151,4 +162,14 @@ test('поток случайных чисел равномерен', () => {
 test('пустые характеристики — это сток', () => {
   assert.deepEqual(stockCar('zarya965').specs, emptySpecs());
   assert.equal(strength(stockCar('zarya965')), 100);
+});
+
+test('повтор укладывается в короткую ссылку и распаковывается обратно', async () => {
+  const { encodeRace, decodeRace } = await import('../src/replay/codec.ts');
+  const original = input({ seed: 'k7m2xq9b' });
+  const code = encodeRace(original);
+  assert.ok(code.length <= 32, `код длиной ${code.length}: ${code}`);
+  const restored = decodeRace(code, { a: original.a.name, b: original.b.name });
+  assert.deepEqual(restored, original);
+  assert.deepEqual(race(restored), race(original), 'повтор обязан совпасть кадр в кадр');
 });

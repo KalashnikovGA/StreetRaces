@@ -182,13 +182,15 @@ for (let i = 0; i < storyboardRuns; i++) {
   const first = result.finishTime.a < result.finishTime.b ? 'a' : 'b';
   if (first !== result.winner) mismatch++;
   if (result.photoFinish) photoFinishes++;
-  if (result.winnerTime < 9.5 || result.winnerTime > 15.01) outOfRange++;
-  if (result.duration > 18) outOfRange++;
+  if (result.screenDuration < 10 || result.screenDuration > 15) outOfRange++;
+  if ((result.duration - result.winnerTime) / result.playbackRate > 2.5) outOfRange++;
+  const top = Math.max(...result.frames.map((frame) => frame.a.speed)) * 3.6;
+  if (top > 340 || top < 90) outOfRange++;
   const last = result.frames.at(-1)!;
-  if (Math.abs(last.a.distance - result.trackLength) > 1 || Math.abs(last.b.distance - result.trackLength) > 1) mismatch++;
+  if (last.a.distance < result.trackLength || last.b.distance < result.trackLength) mismatch++;
 }
 check('победитель пересекает финиш первым', mismatch === 0, `${mismatch} расхождений на ${storyboardRuns}`);
-check('заезд решается за 10–15 секунд', outOfRange === 0, `${outOfRange} выходов за диапазон`);
+check('на экране 10–15 секунд, скорости правдоподобны', outOfRange === 0, `${outOfRange} выходов за диапазон`);
 console.log(`  фотофиниш: ${pct(photoFinishes / storyboardRuns)} заездов`);
 
 // ── 8. Детерминированность ────────────────────────────────────────────────────

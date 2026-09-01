@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>На слабо — песочница баланса</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <h1>НА СЛАБО</h1>
+      <span class="sub">песочница баланса · шаг 1</span>
+      <nav><a href="/">к заезду</a></nav>
+    </header>
+
+    <div class="panel">
+      <h2>Условия заезда</h2>
+      <div class="row">
+        <div>
+          <div class="field"><label>Дистанция</label><select id="distance">
+            <option value="short">402 метра</option>
+            <option value="medium" selected>800 метров</option>
+            <option value="long">1600 метров</option>
+          </select></div>
+          <div class="field"><label>Покрытие</label><select id="surface">
+            <option value="dry">сухо</option><option value="wet">мокро</option>
+          </select></div>
+          <div class="field"><label>Профиль</label><select id="profile">
+            <option value="flat">ровно</option><option value="uphill">в подъём</option>
+          </select></div>
+        </div>
+        <div>
+          <div class="field"><label>Сид</label><input type="text" id="seed" value="k7m2xq9b" /></div>
+          <div class="field"><label></label><button id="reseed">Другой сид</button></div>
+          <p class="muted">Один сид — один и тот же заезд, всегда. На этом держатся
+            повторы по ссылке и серверная проверка ставки.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" id="sides"></div>
+
+    <div class="panel">
+      <h2>Расклад</h2>
+      <div id="odds"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Прогон</h2>
+      <div class="chips" style="margin-bottom:10px">
+        <button data-n="1000">1 000 заездов</button>
+        <button data-n="20000">20 000</button>
+        <button data-n="200000">200 000</button>
+      </div>
+      <pre class="out" id="out">Настройте машины и прогоните пачку заездов.
+Эмпирика должна сойтись с формулой — если нет, ошибка в ядре.</pre>
+    </div>
+  </div>
+  <script type="module" src="/src/sandbox/main.ts"></script>
+</body>
+</html>

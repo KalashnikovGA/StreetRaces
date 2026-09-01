@@ -17,10 +17,17 @@ import type { TuningFlags } from './tuning.ts';
 export const TRACK_LENGTH: Record<Distance, number> = { short: 402, medium: 800, long: 1600 };
 
 /**
- * Сколько заезд идёт на экране. Спецификация требует 10–15 секунд (§3),
- * поэтому длинная дистанция сжимается по времени, а не растягивается.
+ * Сколько заезд идёт на самом деле. Отсюда берутся честные скорости и обороты:
+ * 800 метров за двадцать секунд — это средние 144 км/ч, в это можно поверить.
  */
-const NOMINAL_DURATION: Record<Distance, number> = { short: 10.5, medium: 12.5, long: 14.5 };
+const NOMINAL_DURATION: Record<Distance, number> = { short: 12.5, medium: 20, long: 34 };
+
+/**
+ * Сколько заезд идёт на экране — §3 требует 10–15 секунд.
+ * Длинная дистанция не укорачивается, а прокручивается быстрее: если сжать
+ * само время заезда, спидометр начнёт показывать 500 км/ч на «Корытце».
+ */
+const SCREEN_DURATION: Record<Distance, number> = { short: 10.5, medium: 12.5, long: 14.5 };
 
 export const FPS = 30;
 
@@ -31,6 +38,10 @@ const PHOTO_FINISH = 0.15;
 
 /** Автоматические переключения: 3–4 за заезд, под них пишется звук (§10). */
 const SHIFT_POINTS = [0.11, 0.27, 0.48, 0.73];
+
+/** Сколько машины катятся за финишной чертой, замедляясь. */
+const COAST_TAIL = 2.2;
+const COAST_TAU = 1.6;
 
 export interface RaceOutcome {
   winner: Side;
@@ -84,10 +95,14 @@ export interface RaceResult extends RaceOutcome {
   trackLength: number;
   /** Время каждого по секундам. */
   finishTime: Record<Side, number>;
-  /** За сколько секунд заезд решился. Именно это §3 держит в 10–15 секундах. */
+  /** За сколько секунд заезд решился, в реальном времени. */
   winnerTime: number;
-  /** Полная длина раскадровки: отстающий доезжает после победителя. */
+  /** Полная длина раскадровки в реальном времени: отстающий доезжает позже. */
   duration: number;
+  /** Сколько заезд занимает на экране. Это и есть 10–15 секунд из §3. */
+  screenDuration: number;
+  /** Во сколько раз сцена прокручивает раскадровку быстрее реального времени. */
+  playbackRate: number;
   photoFinish: boolean;
   frames: Frame[];
   events: RaceEvent[];
@@ -183,6 +198,8 @@ interface Profile {
   finishTime: number;
   /** Кумулятивная доля дистанции по нормированному времени, длина RESOLUTION + 1. */
   table: Float64Array;
+  /** Доля дистанции в секунду в момент пересечения черты. */
+  crossingRate: number;
   flags: TuningFlags;
   nitroAt: number | null;
 }
@@ -201,11 +218,17 @@ function buildProfile(racer: Racer, odds: SideOdds, finishTime: number): Profile
   }
   // Нормируем так, чтобы машина прошла ровно дистанцию ровно к своему времени финиша.
   for (let i = 0; i <= RESOLUTION; i++) table[i] = table[i]! / sum;
-  return { finishTime, table, flags, nitroAt };
+  const crossingRate = ((table[RESOLUTION]! - table[RESOLUTION - 1]!) * RESOLUTION) / finishTime;
+  return { finishTime, table, crossingRate, flags, nitroAt };
 }
 
 function progressAt(profile: Profile, t: number): number {
-  if (t >= profile.finishTime) return 1;
+  if (t >= profile.finishTime) {
+    // За чертой машина не растворяется, а катится и тормозит. Иначе на финише
+    // спидометр победителя падает в ноль раньше, чем у отставшего.
+    const after = t - profile.finishTime;
+    return 1 + profile.crossingRate * COAST_TAU * (1 - Math.exp(-after / COAST_TAU));
+  }
   const x = (t / profile.finishTime) * RESOLUTION;
   const i = Math.floor(x);
   const lo = profile.table[i] ?? 0;
@@ -230,12 +253,15 @@ export function race(input: RaceInput): RaceResult {
   // но экранное время остаётся в требуемых 10–15 секундах.
   const reference = 200;
   const paceFactor = (reference / Math.max(40, winnerOdds.eff)) ** 0.16;
-  const winnerTime = clamp(NOMINAL_DURATION[conditions.distance] * paceFactor, 9.5, 15);
+  const nominal = NOMINAL_DURATION[conditions.distance];
+  const winnerTime = clamp(nominal * paceFactor, nominal * 0.82, nominal * 1.22);
 
-  // Разрыв: чем увереннее был фаворит, тем шире. Чем неожиданнее победа, тем ближе фотофиниш.
-  const confidence = clamp((pWinner - 0.5) * 2, 0, 1);
+  // Разрыв на финише — непрерывная функция шанса, который был у победителя.
+  // Чем предрешённее была победа, тем шире; чудо приезжает на волосок.
+  // Через отсечку по уверенности это не выразить: тогда любой апсет, от мелкого
+  // до чуда, давал одинаковый минимальный разрыв, и фотофиниш выпадал в трети заездов.
   const jitter = 0.8 + 0.4 * rng();
-  const gap = (GAP_MIN + (GAP_MAX - GAP_MIN) * confidence ** 1.4) * jitter;
+  const gap = (GAP_MIN + (GAP_MAX - GAP_MIN) * pWinner ** 2.2) * jitter;
   const loserTime = winnerTime + gap;
 
   const aTime = outcome.winner === 'a' ? winnerTime : loserTime;
@@ -245,7 +271,7 @@ export function race(input: RaceInput): RaceResult {
   void loserOdds;
 
   const duration = Math.max(aTime, bTime);
-  const frameCount = Math.ceil(duration * FPS) + 1;
+  const frameCount = Math.ceil((duration + COAST_TAIL) * FPS) + 1;
   const dt = 1 / FPS;
   const frames: Frame[] = [];
   const events: RaceEvent[] = [{ t: 0, kind: 'start', side: null }];
@@ -271,8 +297,8 @@ export function race(input: RaceInput): RaceResult {
 
     frames.push({
       t,
-      a: { distance: da, progress: pa, speed: (da - prevA) / dt, gear: gearA, finished: pa >= 1 },
-      b: { distance: db, progress: pb, speed: (db - prevB) / dt, gear: gearB, finished: pb >= 1 },
+      a: { distance: da, progress: pa, speed: (da - prevA) / dt, gear: gearA, finished: t >= aTime },
+      b: { distance: db, progress: pb, speed: (db - prevB) / dt, gear: gearB, finished: t >= bTime },
     });
 
     if (gearA > prevGearA) events.push({ t, kind: 'shift', side: 'a', gear: gearA });
@@ -319,6 +345,8 @@ export function race(input: RaceInput): RaceResult {
     finishTime: { a: aTime, b: bTime },
     winnerTime,
     duration,
+    screenDuration: SCREEN_DURATION[conditions.distance],
+    playbackRate: winnerTime / SCREEN_DURATION[conditions.distance],
     photoFinish: Math.abs(aTime - bTime) < PHOTO_FINISH,
     frames,
     events,
