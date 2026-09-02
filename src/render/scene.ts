@@ -13,6 +13,7 @@ import { getModel, horsepower } from '../core/cars.ts';
 import type { Nitro, Side } from '../core/types.ts';
 import { PALETTE } from './palette.ts';
 import { drawCar, type Pimp } from './car.ts';
+import { loadCarSprites, loadSceneSprites, sceneSprites, tileMirrored } from './sprites.ts';
 
 export interface SideVisual {
   name: string;
@@ -68,6 +69,16 @@ export class RaceScene {
     this.ctx = ctx;
     this.countdownLeft = options.countdown ?? 3.2;
     this.resize();
+
+    // Спрайты подтягиваются в фоне: пока их нет, заезд идёт на векторе.
+    // Ждать сеть перед стартом нельзя — §3 обещает результат за 15 секунд.
+    void Promise.all([
+      loadSceneSprites(),
+      loadCarSprites(this.modelOf('a')),
+      loadCarSprites(this.modelOf('b')),
+    ]).then(() => {
+      if (!this.raf) this.renderAt(-1);
+    });
   }
 
   resize(): void {
@@ -165,10 +176,40 @@ export class RaceScene {
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, w, h);
 
-    // Два слоя города: дальний почти стоит, ближний уезжает. Ощущение скорости.
+    // Два плана: дальний почти стоит, ближний уезжает. Ощущение скорости
+    // держится на этой разнице, а не на скорости самой машины.
     this.cityOffset = this.cameraOffset(leader) * this.pixelsPerMeter();
-    this.drawCity(h * 0.42, 220, this.cityOffset * 0.12, PALETTE.cityFar, 0.5);
-    this.drawCity(h * 0.52, 150, this.cityOffset * 0.32, PALETTE.cityNear, 0.9);
+    const { wall } = sceneSprites();
+    if (wall) {
+      // Стена снята днём, а заезд идёт ночью: бетон сажается в темноту
+      // прозрачностью, иначе фон ярче машин и тянет взгляд на себя.
+      const farTop = h * 0.315;
+      const nearTop = h * 0.40;
+      ctx.save();
+      ctx.globalAlpha = 0.16;
+      tileMirrored(ctx, wall, 0, farTop, w, h * 0.15, this.cityOffset * 0.10);
+      ctx.globalAlpha = 0.30;
+      tileMirrored(ctx, wall, 0, nearTop, w, h * 0.15, this.cityOffset * 0.28);
+      ctx.restore();
+
+      // Пятно натриевого фонаря над дальним планом. Единственный тёплый
+      // источник в кадре — тот же, что светит в шапке гаража.
+      const lamp = ctx.createRadialGradient(w * 0.72, h * 0.30, 0, w * 0.72, h * 0.30, h * 0.45);
+      lamp.addColorStop(0, 'rgba(224,123,57,0.16)');
+      lamp.addColorStop(1, 'rgba(224,123,57,0)');
+      ctx.fillStyle = lamp;
+      ctx.fillRect(0, h * 0.10, w, h * 0.45);
+
+      // Низ стены тонет у обочины — иначе она висит в воздухе.
+      const foot = ctx.createLinearGradient(0, h * 0.46, 0, h * 0.55);
+      foot.addColorStop(0, 'rgba(14,16,18,0)');
+      foot.addColorStop(1, PALETTE.skyTop);
+      ctx.fillStyle = foot;
+      ctx.fillRect(0, h * 0.46, w, h * 0.09);
+    } else {
+      this.drawCity(h * 0.42, 220, this.cityOffset * 0.12, PALETTE.cityFar, 0.5);
+      this.drawCity(h * 0.52, 150, this.cityOffset * 0.32, PALETTE.cityNear, 0.9);
+    }
   }
 
   private drawCity(baseY: number, spacing: number, offset: number, color: string, windowChance: number): void {
@@ -204,25 +245,34 @@ export class RaceScene {
 
     ctx.fillStyle = PALETTE.ground;
     ctx.fillRect(0, h * 0.50, w, h * 0.50);
-    ctx.fillStyle = PALETTE.road;
-    ctx.fillRect(0, h * 0.54, w, h * 0.44);
-    ctx.fillStyle = PALETTE.roadEdge;
-    ctx.fillRect(0, h * 0.54, w, 3);
-    ctx.fillRect(0, h * 0.975, w, 3);
 
-    // Разделительная между полосами.
-    ctx.fillStyle = PALETTE.lane;
-    ctx.fillRect(0, h * 0.775, w, 2);
+    const { road } = sceneSprites();
+    if (road) {
+      // Полотно снято сверху и тайлится вдоль экрана. Кромки и прерывистая
+      // между полосами приходят с самой дороги, рисовать их не нужно.
+      tileMirrored(ctx, road, 0, h * 0.54, w, h * 0.44, offset * ppm);
+      // Тот же ночной прижим, что и на стене: днёвный асфальт слишком светлый.
+      ctx.fillStyle = 'rgba(16,18,20,0.42)';
+      ctx.fillRect(0, h * 0.54, w, h * 0.44);
+    } else {
+      ctx.fillStyle = PALETTE.road;
+      ctx.fillRect(0, h * 0.54, w, h * 0.44);
+      ctx.fillStyle = PALETTE.roadEdge;
+      ctx.fillRect(0, h * 0.54, w, 3);
+      ctx.fillRect(0, h * 0.975, w, 3);
+      ctx.fillStyle = PALETTE.lane;
+      ctx.fillRect(0, h * 0.775, w, 2);
 
-    // Разметка: штрих каждые 10 метров. По ней читается скорость.
-    ctx.fillStyle = PALETTE.marking;
-    const step = 10;
-    const first = Math.floor(offset / step) * step;
-    for (let m = first; m < offset + METERS_ON_SCREEN + step; m += step) {
-      const x = (m - offset) * ppm;
-      ctx.globalAlpha = 0.35;
-      ctx.fillRect(x, h * 0.775, ppm * 3.2, 2);
-      ctx.globalAlpha = 1;
+      // Разметка: штрих каждые 10 метров. По ней читается скорость.
+      ctx.fillStyle = PALETTE.marking;
+      const step = 10;
+      const first = Math.floor(offset / step) * step;
+      for (let m = first; m < offset + METERS_ON_SCREEN + step; m += step) {
+        const x = (m - offset) * ppm;
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(x, h * 0.775, ppm * 3.2, 2);
+        ctx.globalAlpha = 1;
+      }
     }
 
     // Финишная черта.
@@ -305,7 +355,7 @@ export class RaceScene {
         vx: direction * (10 + Math.random() * 26) * spread,
         vy: -6 - Math.random() * 14,
         life: 0.22 + Math.random() * 0.26,
-        size: 2 + Math.random() * 4,
+        size: 1.5 + Math.random() * 2.5,
         color,
       });
     }
@@ -322,9 +372,11 @@ export class RaceScene {
       }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.size += dt * 26;
+      p.size += dt * 18;
       ctx.save();
-      ctx.globalAlpha = Math.max(0, p.life);
+      // Частица гаснет вместе с жизнью и никогда не бывает плотной:
+      // на спрайтовых машинах плотный кружок читается как шарик, а не как дым.
+      ctx.globalAlpha = Math.max(0, p.life) * 0.55;
       ctx.fillStyle = p.color;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);

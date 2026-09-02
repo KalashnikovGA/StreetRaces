@@ -18,6 +18,7 @@ import { RaceScene, type SideVisual } from '../render/scene.ts';
 import { RaceAudio } from '../audio/engine.ts';
 import { PAINTS } from '../render/palette.ts';
 import { mountChrome, mountFooter } from '../ui/chrome.ts';
+import { SPRITE_READY } from '../render/sprites.ts';
 import { currentIndex, owned } from '../ui/state.ts';
 
 const canvas = document.getElementById('track') as HTMLCanvasElement;
@@ -61,7 +62,14 @@ function demoRace(): RaceInput {
     profile: rng() < 0.3 ? 'uphill' : 'flat',
   };
   const mine = owned[currentIndex()]!;
-  const rival = CAR_MODELS[Math.floor(rng() * 4)]!;
+  // Ставки в общем пуле только внутри своего класса (§4), поэтому и
+  // показательный соперник берётся оттуда же. Из класса выбираются сперва
+  // машины, прошедшие пайплайн: на них видно, ради чего всё это.
+  const klass = getModel(mine.car.modelId).klass;
+  const pool = CAR_MODELS.filter((model) => model.klass === klass && model.id !== mine.car.modelId);
+  const withSprites = pool.filter((model) => SPRITE_READY.has(model.id));
+  const shelf = withSprites.length > 0 ? withSprites : pool.length > 0 ? pool : CAR_MODELS;
+  const rival = shelf[Math.floor(rng() * shelf.length)]!;
   const level = () => Math.floor(rng() * 11);
   const a: Racer = {
     name: 'Ты',

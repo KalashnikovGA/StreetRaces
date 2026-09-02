@@ -13,12 +13,11 @@ import {
   CLASS_RANGES, MAX_SPEC_LEVEL, getModel, horsepower, strength,
   type SpecKey,
 } from '../core/index.ts';
-import { PAINTS } from '../render/palette.ts';
 import { mountChrome, mountFooter } from '../ui/chrome.ts';
 import {
   career, currentIndex, formatCoins, lastRaces, owned, partPrice, purse, resaleValue,
 } from '../ui/state.ts';
-import { Garage } from './scene.ts';
+import { Stage } from './stage.ts';
 
 const SPEC_LABELS: Record<SpecKey, string> = {
   tires: 'Шины',
@@ -33,9 +32,7 @@ const SPEC_LABELS: Record<SpecKey, string> = {
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 let index = currentIndex();
-let garage: Garage | null = null;
-/** Откуда брать GLB. В самодостаточной странице подменяется на data-URI. */
-let resolveModelUrl: (modelId: string) => string = (id) => `/models/${id}.glb`;
+let stage: Stage | null = null;
 
 // ── машина ───────────────────────────────────────────────────────────────────
 
@@ -290,44 +287,15 @@ function select(next: number): void {
   renderCarList();
   renderLog();
 
-  $('loading').hidden = false;
-  $('loading').textContent = 'Загружаю модель';
-  garage?.dispose();
-  garage = new Garage({
-    canvas: $('scene') as unknown as HTMLCanvasElement,
-    modelUrl: resolveModelUrl(entry.car.modelId),
-    onReady: () => {
-      garage?.setBodyColor(PAINTS[entry.paint] ?? '#d8d5ce');
-      $('loading').hidden = true;
-    },
-    onError: (error) => {
-      console.error(error);
-      $('loading').textContent = 'Модель не загрузилась: собери public/models';
-    },
-  });
-  garage.setBodyColor(PAINTS[entry.paint] ?? '#d8d5ce');
-  garage.start();
-  $('toggle-spin').setAttribute('aria-pressed', 'true');
+  stage ??= new Stage({ canvas: $('scene') as unknown as HTMLCanvasElement });
+  stage.setCar(entry.car.modelId, entry.paint);
+  stage.start();
 }
 
-$('toggle-spin').addEventListener('click', () => {
-  if (!garage) return;
-  const spinning = !garage.isSpinning();
-  garage.setSpinning(spinning);
-  $('toggle-spin').setAttribute('aria-pressed', String(spinning));
-});
+window.addEventListener('resize', () => stage?.resize());
 
-window.addEventListener('resize', () => garage?.resize());
-
-// Вкладку свернули — не жжём батарею на вращающемся подиуме.
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) garage?.stop();
-  else garage?.start();
-});
-
-/** Точка входа. `resolve` подменяется в сборке страницы-артефакта. */
-export function mountGarage(resolve?: (modelId: string) => string): void {
-  if (resolve) resolveModelUrl = resolve;
+/** Точка входа. */
+export function mountGarage(): void {
   mountChrome('garage');
   mountFooter();
   renderCareer();

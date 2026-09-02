@@ -18,7 +18,7 @@
  * 2. Выбрасывает шильдики и таблички производителя — логотипы мы не
  *    воспроизводим (CLAUDE.md, юридические ограничения).
  * 3. Выбрасывает текстуры: цвет кузова в этой игре параметр, а не файл (§11).
- * 4. Сливает всё в четыре меша с материалами body, glass, wheel, light.
+ * 4. Сливает всё в пять мешей: body, glass, wheel, light, tail.
  *    Гараж красит материал с именем body — на этом держится окраска.
  * 5. Децимирует кластеризацией по решётке: вершины в одной ячейке сливаются
  *    в одну. Честный QEM был бы точнее, но требует внешней зависимости,
@@ -48,9 +48,14 @@ if (!existsSync(input)) {
 
 const cellIndex = rest.indexOf('--cell');
 const cell = cellIndex >= 0 ? rest[cellIndex + 1] : '0.018';
-const output = `public/models/${carId}.glb`;
+/** --dry печатает разбор материалов по слоям и ничего не пишет на диск. */
+const dry = rest.includes('--dry');
+const output = `assets/models/${carId}.glb`;
 
 // ── страница, которая делает всю работу в браузере ───────────────────────────
+//
+// Внимание: это шаблонная строка, и `\b` в ней — символ backspace, а не граница
+// слова. Все границы слов в регулярках ниже экранированы двойным слэшем.
 
 const PAGE = `<!doctype html>
 <meta charset="utf-8" />
@@ -63,15 +68,24 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 
-/** Салон, двигатель, шильдики и таблички в игру не едут. */
-const DROP = /badge|manufacturerplate|nameplate|logo|emblem|interior|engine|seat|dashboard/i;
+/**
+ * Салон, двигатель, шильдики и таблички в игру не едут: первого и второго
+ * сбоку не видно (§11), третье не воспроизводим по юридическим причинам.
+ * Слои размытых дисков (*_Blur) — это ассеты для эффекта скорости
+ * в исходной игре, нам они только мешают.
+ */
+const DROP = /badge|emblem|logo|plate_d|nameplate|manufacturerplate|\\bint_|interior|seat|carpet|stitch|dashboard|odometer|gauge|speaker|pedal|\\beng_|engine|blur|chassis_under/i;
 
-/** Материал исходника -> слой пайплайна. Порядок важен: первое совпадение. */
+/**
+ * Материал исходника -> слой пайплайна. Порядок важен: первое совпадение.
+ * Фары идут до стекла: HL_Glass и TL_Glass — это фонари, а не остекление.
+ */
 const GROUPS = [
-  ['glass', /window|windscreen|windshield|glazing/i],
-  ['wheel', /wheel|tyre|tire|rim|calliper|caliper|brake/i],
-  ['light', /light|lamp|headlamp|red_?glass/i],
-  ['body', /paint|body|coloured|colored|base|carbon|grille|kit|panel|trim/i],
+  ['tail', /\\btl_|taillight|tail_?lamp|red_?glass/i],
+  ['light', /\\bhl_|light|lamp|headlamp/i],
+  ['glass', /glass|window|windscreen|windshield|glazing/i],
+  ['wheel', /wheel|tyre|tire|_rim|\\brim|calliper|caliper|brake|disc/i],
+  ['body', /paint|body|chassis|plastic|black|chrome|exhaust|mirror|coloured|colored|base|carbon|grille|kit|panel|trim|material/i],
 ];
 
 const LENGTH_M = 4.6;
@@ -120,7 +134,8 @@ const LOOK = {
   body: { color: 0xffffff, roughness: 0.42, metalness: 0.15 },
   glass: { color: 0x20262b, roughness: 0.15, metalness: 0, transparent: true, opacity: 0.55 },
   wheel: { color: 0x1a1c1e, roughness: 0.55, metalness: 0 },
-  light: { color: 0xd8d5ce, roughness: 0.25, metalness: 0 },
+  light: { color: 0xf0dcc0, roughness: 0.25, metalness: 0 },
+  tail: { color: 0xc04a35, roughness: 0.3, metalness: 0 },
 };
 
 new GLTFLoader().load('/car.glb', (gltf) => {
@@ -130,12 +145,16 @@ new GLTFLoader().load('/car.glb', (gltf) => {
   const buckets = new Map(GROUPS.map(([name]) => [name, []]));
   let dropped = 0;
 
+  const mapping = new Map();
+
   car.traverse((node) => {
     if (!node.isMesh) return;
     const label = (node.material?.name ?? '') + ' ' + (node.name ?? '');
-    if (DROP.test(label)) { dropped++; return; }
+    const material = node.material?.name ?? '(без имени)';
+    if (DROP.test(label)) { dropped++; mapping.set(material, 'выброшен'); return; }
     const hit = GROUPS.find(([, re]) => re.test(label));
-    if (!hit) { dropped++; return; }
+    if (!hit) { dropped++; mapping.set(material, 'выброшен (не опознан)'); return; }
+    mapping.set(material, hit[0]);
     const geometry = new BufferGeometry();
     const src = node.geometry.index ? node.geometry.toNonIndexed() : node.geometry;
     geometry.setAttribute('position', src.getAttribute('position').clone());
@@ -193,6 +212,7 @@ new GLTFLoader().load('/car.glb', (gltf) => {
       glb: btoa(binary),
       stats,
       dropped,
+      mapping: [...mapping.entries()],
       sizeM: [size.x, size.y, size.z].map((v) => +(v * scale).toFixed(2)),
     };
   }, (error) => { window.done = { error: String(error) }; }, { binary: true });
@@ -245,6 +265,14 @@ server.close();
 if (result.error) {
   console.error('Не собралось:', result.error);
   process.exit(1);
+}
+
+if (dry) {
+  console.log(`разбор материалов ${input}:`);
+  for (const [material, layer] of result.mapping.sort()) {
+    console.log(`  ${layer.padEnd(22)} ${material}`);
+  }
+  process.exit(0);
 }
 
 writeFileSync(output, Buffer.from(result.glb, 'base64'));

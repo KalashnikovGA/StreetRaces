@@ -14,15 +14,14 @@ import {
   CAR_MODELS, CLASS_ORDER, CLASS_RANGES, getModel, horsepower, stockCar,
   type CarClass, type CarModel,
 } from '../core/index.ts';
-import { Garage } from '../garage/scene.ts';
-import { PAINTS } from '../render/palette.ts';
+import { Stage } from '../garage/stage.ts';
 import { mountChrome, mountFooter } from '../ui/chrome.ts';
 import { formatCoins, owned, purse } from '../ui/state.ts';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 let picked = 0;
-let stage: Garage | null = null;
+let stage: Stage | null = null;
 
 /** Лучший класс в гараже. От него зависит, что уже можно взять. */
 function bestClass(): CarClass {
@@ -93,19 +92,9 @@ function renderPick(): void {
 }
 
 function loadStage(model: CarModel): void {
-  $('loading').hidden = false;
-  $('loading').textContent = 'Загружаю модель';
-  stage?.dispose();
-  stage = new Garage({
-    canvas: $('scene') as unknown as HTMLCanvasElement,
-    modelUrl: `/models/${model.id}.glb`,
-    onReady: () => { $('loading').hidden = true; },
-    onError: (error) => {
-      console.error(error);
-      $('loading').textContent = 'Модель не загрузилась: собери public/models';
-    },
-  });
-  stage.setBodyColor(PAINTS.white!);
+  stage ??= new Stage({ canvas: $('scene') as unknown as HTMLCanvasElement });
+  // Машина на площадке стоит в заводском белом: окраска — это уже Pimp.
+  stage.setCar(model.id, 'white');
   stage.start();
 }
 
@@ -208,10 +197,6 @@ $('buy').addEventListener('click', () => {
 });
 
 window.addEventListener('resize', () => stage?.resize());
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) stage?.stop();
-  else stage?.start();
-});
 
 mountChrome('shop');
 mountFooter();

@@ -16,20 +16,6 @@
 .stage { position: relative; border-right: 1px solid var(--concrete-lt); background: var(--pit); }
 #scene { display: block; width: 100%; height: 300px; }
 
-.stage-note {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  display: grid;
-  place-items: center;
-  color: var(--chalk-faint);
-  background: var(--pit);
-}
-.stage-note[hidden] { display: none; }
-
-.stage-spin { position: absolute; right: 8px; bottom: 8px; }
-.stage-spin[aria-pressed='false'] { color: var(--chalk-faint); }
-
 .plate-card { padding: 12px 14px; display: flex; flex-direction: column; }
 .plate-card h1 { font-size: 34px; font-weight: 600; }
 .plate-card .model { margin: 2px 0 10px; color: var(--chalk-dim); }

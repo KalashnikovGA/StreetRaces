@@ -9,16 +9,6 @@
   color: var(--chalk-dim);
 }
 
-.stage-hint {
-  position: absolute;
-  left: 10px;
-  bottom: 8px;
-  margin: 0;
-  color: var(--chalk-faint);
-  font-size: 12px;
-  pointer-events: none;
-}
-
 .swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
 .swatches button {
   aspect-ratio: 1;
@@ -44,24 +34,5 @@
   border-radius: 0;
   padding: 6px 8px;
 }
-
-.lamps { display: grid; grid-template-columns: repeat(3, 1fr); }
-.lamps button {
-  display: grid;
-  gap: 2px;
-  padding: 9px 12px;
-  background: transparent;
-  border: 0;
-  border-left: 1px solid var(--concrete-lt);
-  color: var(--chalk-faint);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.lamps button:first-child { border-left: 0; }
-.lamps button:hover { background: var(--concrete-lt); }
-.lamps button[aria-pressed='true'] { color: var(--chalk); }
-.lamps .name { font-family: var(--display); font-size: 16px; }
-.lamps .state { font-size: 12px; }
 
 @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }

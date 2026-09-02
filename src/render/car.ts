@@ -1,10 +1,13 @@
 /**
  * Отрисовка машины. §11.
  *
- * Пока это векторный плейсхолдер, но порядок и состав слоёв уже те, что придут
- * из блендеровского пайплайна на шаге 8: тень → кузов → стёкла → колёса → пимп →
- * винил → блики. Кузов рисуется светлым и умножается на цвет, поэтому любая
- * окраска — строка кода, а не новый файл (§11).
+ * Два пути отрисовки, один и тот же порядок слоёв.
+ *
+ * Если для машины отрендерены спрайты (public/sprites/<id>), рисуются они:
+ * тень → неон → кузов, умноженный на цвет → блики → стёкла → фары → фонари →
+ * колёса с поворотом. Если спрайтов нет — тот же порядок рисуется вектором
+ * по контуру из SILHOUETTES. Второй путь остаётся, пока пайплайн прошли не все
+ * машины (§14, шаг 8), и работает как запасной при неудачной загрузке.
  *
  * Слой винила принимает произвольную текстуру, а не набор пресетов. Это
  * единственное требование Sponsored Car к пайплайну, которое надо заложить
@@ -12,6 +15,7 @@
  */
 
 import { PALETTE, PAINTS } from './palette.ts';
+import { carSprites, tintedBody, type CarSprites } from './sprites.ts';
 
 /** Силуэт в долях габаритного прямоугольника. Те же якоря, что у художника (§11). */
 export interface Silhouette {
@@ -97,6 +101,19 @@ export const SILHOUETTES: Record<string, Silhouette> = {
     spoiler: true,
     ride: 0.03,
   },
+  // Седан 80-х: длинный багажник, прямая крыша, широкие арки.
+  // Контур снят с той же модели, что и спрайты (docs/RENDER.md).
+  vogel190: {
+    body: [
+      [0.02, 0.73], [0.02, 0.59], [0.03, 0.43], [0.18, 0.43], [0.26, 0.35],
+      [0.27, 0.32], [0.39, 0.30], [0.58, 0.31], [0.58, 0.34], [0.69, 0.44],
+      [0.94, 0.47], [0.97, 0.59], [0.98, 0.73],
+    ],
+    glass: [[0.25, 0.44], [0.30, 0.32], [0.56, 0.32], [0.63, 0.44]],
+    wheels: [{ x: 0.244, y: 0.755, r: 0.061 }, { x: 0.817, y: 0.755, r: 0.061 }],
+    spoiler: true,
+    ride: 0.035,
+  },
   // Клин: почти без капота, крыша прижата, огромное антикрыло.
   corsa_f40: {
     body: [[0.02, 0.73], [0.06, 0.60], [0.30, 0.52], [0.44, 0.36], [0.66, 0.35], [0.84, 0.50], [0.97, 0.56], [0.98, 0.73]],
@@ -150,10 +167,107 @@ function path(ctx: CanvasRenderingContext2D, points: [number, number][], w: numb
 }
 
 /**
+ * Линия земли в габарите машины. Совпадает с низом колеса векторного
+ * силуэта, поэтому спрайтовые и векторные машины стоят на одной дороге.
+ */
+const GROUND = 0.92;
+
+/** Отрисовка слоями из пайплайна. Порядок тот же, что и у вектора. */
+function drawSpriteCar(
+  ctx: CanvasRenderingContext2D,
+  sprites: CarSprites,
+  options: DrawCarOptions,
+): void {
+  const { pimp, width } = options;
+  const { meta, images } = sprites;
+  const w = width;
+  const h = w * 0.42;
+  const paint = PAINTS[pimp.paint] ?? pimp.paint ?? PAINTS.white!;
+
+  // Кадр спрайта шире машины: масштаб считается по её собственному габариту,
+  // иначе поля кадра съедят ширину и машины разъедутся по размеру.
+  const scale = w / (meta.box.x1 - meta.box.x0 + 1);
+  const dx = -meta.box.x0 * scale;
+  const dy = h * GROUND - meta.ground * scale;
+  const frameW = meta.frame[0] * scale;
+  const frameH = meta.frame[1] * scale;
+
+  // Занижение опускает кузов к колёсам; колёса и тень остаются на земле.
+  const drop = (pimp.drop ?? 0) * 0.03 * h;
+
+  ctx.save();
+  ctx.translate(0, options.squat * h * 0.02);
+
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = PALETTE.shadow;
+  ctx.beginPath();
+  ctx.ellipse(w * 0.5, h * GROUND, w * 0.44, h * 0.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  if (pimp.neon) {
+    ctx.save();
+    ctx.shadowColor = pimp.neon;
+    ctx.shadowBlur = 22;
+    ctx.strokeStyle = pimp.neon;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.18, h * (GROUND - 0.06));
+    ctx.lineTo(w * 0.82, h * (GROUND - 0.06));
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.translate(0, drop);
+  ctx.drawImage(tintedBody(sprites, paint, pimp.vinyl, pimp.vinylOpacity), dx, dy, frameW, frameH);
+
+  // Блики сняты на чёрном, поэтому кладутся сложением: тёмная окраска
+  // перестаёт быть плоской заливкой, светлая не выгорает.
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.5;
+  ctx.drawImage(images.shade, dx, dy, frameW, frameH);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+
+  ctx.drawImage(images.glass, dx, dy, frameW, frameH);
+  ctx.drawImage(images.light, dx, dy, frameW, frameH);
+  ctx.drawImage(images.tail, dx, dy, frameW, frameH);
+
+  // Стоп-сигнал: тот же слой фонарей, добавленный сложением.
+  if (options.braking) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(images.tail, dx, dy, frameW, frameH);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  for (const wheel of meta.wheels) {
+    const size = (wheel.r * 2 + 1) * scale;
+    ctx.save();
+    ctx.translate(dx + wheel.cx * scale, dy + wheel.cy * scale);
+    ctx.rotate(options.wheelAngle);
+    ctx.drawImage(images.wheel, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+/**
  * Рисует машину в точке (0,0) — левый нижний угол габарита.
  * Вызывающий сам ставит трансформацию.
  */
 export function drawCar(ctx: CanvasRenderingContext2D, options: DrawCarOptions): void {
+  const sprites = carSprites(options.modelId);
+  if (sprites) {
+    drawSpriteCar(ctx, sprites, options);
+    return;
+  }
+
   const { modelId, pimp, width } = options;
   const shape = silhouetteOf(modelId);
   const h = width * 0.42;

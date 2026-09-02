@@ -18,7 +18,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { SILHOUETTES } from '../src/render/car.ts';
 
-const OUT_DIR = 'public/models';
+const OUT_DIR = 'assets/models';
 
 /**
  * Машины, у которых в public/models лежит рендер из пайплайна, а не

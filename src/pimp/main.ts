@@ -10,7 +10,7 @@ import '../ui/theme.css';
 import '../garage/garage.css';
 import './pimp.css';
 import { getModel } from '../core/index.ts';
-import { Garage, LIGHT_RIG, type LightId } from '../garage/scene.ts';
+import { Stage } from '../garage/stage.ts';
 import { PAINTS } from '../render/palette.ts';
 import { mountChrome, mountFooter } from '../ui/chrome.ts';
 import { currentIndex, owned } from '../ui/state.ts';
@@ -21,7 +21,7 @@ const index = currentIndex();
 const entry = owned[index]!;
 const model = getModel(entry.car.modelId);
 
-let stage: Garage | null = null;
+let stage: Stage | null = null;
 
 function renderPaints(): void {
   $('paints').replaceChildren(...Object.entries(PAINTS).map(([name, hex]) => {
@@ -32,32 +32,8 @@ function renderPaints(): void {
     button.setAttribute('aria-pressed', String(name === entry.paint));
     button.addEventListener('click', () => {
       entry.paint = name;
-      stage?.setBodyColor(hex);
+      stage?.setPaint(hex);
       renderPaints();
-    });
-    return button;
-  }));
-}
-
-function renderLamps(): void {
-  $('lamps').replaceChildren(...LIGHT_RIG.map((item) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.setAttribute('aria-pressed', 'true');
-
-    const name = document.createElement('span');
-    name.className = 'name';
-    name.textContent = item.label;
-    const state = document.createElement('span');
-    state.className = 'state';
-    state.textContent = 'горит';
-
-    button.append(name, state);
-    button.addEventListener('click', () => {
-      const on = button.getAttribute('aria-pressed') !== 'true';
-      button.setAttribute('aria-pressed', String(on));
-      state.textContent = on ? 'горит' : 'погашена';
-      stage?.setLightEnabled(item.id as LightId, on);
     });
     return button;
   }));
@@ -71,28 +47,12 @@ $('plate').addEventListener('input', (event) => {
   entry.plate = (event.target as HTMLInputElement).value;
 });
 
-stage = new Garage({
-  canvas: $('scene') as unknown as HTMLCanvasElement,
-  modelUrl: `/models/${entry.car.modelId}.glb`,
-  onReady: () => {
-    stage?.setBodyColor(PAINTS[entry.paint] ?? '#d8d5ce');
-    $('loading').hidden = true;
-  },
-  onError: (error) => {
-    console.error(error);
-    $('loading').textContent = 'Модель не загрузилась: собери public/models';
-  },
-});
-stage.setBodyColor(PAINTS[entry.paint] ?? '#d8d5ce');
+stage = new Stage({ canvas: $('scene') as unknown as HTMLCanvasElement });
+stage.setCar(entry.car.modelId, entry.paint);
 stage.start();
 
 window.addEventListener('resize', () => stage?.resize());
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) stage?.stop();
-  else stage?.start();
-});
 
 mountChrome('pimp');
 mountFooter();
 renderPaints();
-renderLamps();
