@@ -166,10 +166,16 @@ new GLTFLoader().load('/source.glb', async (gltf) => {
 
 async function renderCar(root) {
   const groups = { body: [], glass: [], light: [], tail: [], wheel: [] };
+  // Подготовленные модели приходят с именами слоёв, процедурные плейсхолдеры
+  // из build-car-models.mjs — со своими. Приводим к одному словарю.
+  const ALIAS = {
+    body: 'body', glass: 'glass', light: 'light', tail: 'tail', wheel: 'wheel',
+    tire: 'wheel', rim: 'wheel', headlight: 'light', taillight: 'tail',
+  };
   root.traverse((node) => {
     if (!node.isMesh) return;
-    const key = node.material?.name ?? node.name;
-    if (groups[key]) groups[key].push(node);
+    const key = ALIAS[node.material?.name ?? node.name];
+    if (key) groups[key].push(node);
   });
 
   const box = new Box3().setFromObject(root);
@@ -194,6 +200,8 @@ async function renderCar(root) {
       for (const node of list) node.visible = names.includes(key);
     }
   };
+
+  if (groups.body.length === 0) { window.done = { error: 'в модели нет слоя body' }; return; }
 
   const white = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.66, metalness: 0.0 });
   // Блики снимаются на чёрном: в кадр попадает только то, что даёт лак.

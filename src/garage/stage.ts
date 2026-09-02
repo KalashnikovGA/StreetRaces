@@ -19,7 +19,7 @@ export interface StageOptions {
 }
 
 /** Сколько ширины бокса занимает машина. */
-const CAR_SHARE = 0.68;
+const CAR_SHARE = 0.66;
 /** Линия пола в долях высоты. */
 const FLOOR = 0.86;
 /** Где стена встречается с полом. */
@@ -48,6 +48,9 @@ export class Stage {
     const ctx = this.canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D недоступен');
     this.ctx = ctx;
+    // Витрина показывает машину крупно: масштабирование спрайта должно быть
+    // хорошим, а не быстрым.
+    ctx.imageSmoothingQuality = 'high';
     this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     void loadSceneSprites().then(() => this.draw());
     this.resize();

@@ -2,23 +2,101 @@
   "_": "Параметры сцены рендера. Меняются только с явного разрешения человека и только вместе с полным перерендером всей библиотеки: на этих числах держится совпадение слоёв по пикселям.",
   "camera": {
     "type": "ORTHO",
-    "rotation_euler_deg": { "x": 90.0, "y": 0.0, "z": -90.0 },
-    "location": { "x": 12.0, "y": 0.0, "z": 0.85 },
+    "rotation_euler_deg": {
+      "x": 90.0,
+      "y": 0.0,
+      "z": -90.0
+    },
+    "location": {
+      "x": 12.0,
+      "y": 0.0,
+      "z": 0.85
+    },
     "ortho_scale": 5.06,
     "_ortho_scale": "Самая длинная машина библиотеки — 4.6 м, плюс запас 10%."
   },
   "render": {
-    "resolution_x": 1024,
-    "resolution_y": 512,
+    "resolution_x": 1536,
+    "resolution_y": 768,
     "film_transparent": true,
     "engine": "CYCLES",
-    "samples": 128
+    "samples": 128,
+    "_resolution": "Витрина в гараже рисует машину примерно в 1150 физических пикселей на экране с двойной плотностью. 1024 пришлось бы растягивать, 1536 хватает с запасом."
   },
   "lights": [
-    { "name": "key",  "type": "AREA", "location": [6.0, -4.0, 5.5],  "rotation_euler_deg": [42, 0, 56],   "energy": 900, "size": 4.0, "color": [1.0, 0.86, 0.72] },
-    { "name": "fill", "type": "AREA", "location": [4.0, 6.0, 2.4],   "rotation_euler_deg": [72, 0, -145], "energy": 260, "size": 6.0, "color": [0.72, 0.80, 0.86] },
-    { "name": "rim",  "type": "AREA", "location": [-7.0, 2.0, 3.2],  "rotation_euler_deg": [64, 0, -108], "energy": 600, "size": 3.0, "color": [0.80, 0.88, 0.94] }
+    {
+      "name": "key",
+      "type": "AREA",
+      "location": [
+        6.0,
+        -4.0,
+        5.5
+      ],
+      "rotation_euler_deg": [
+        42,
+        0,
+        56
+      ],
+      "energy": 900,
+      "size": 4.0,
+      "color": [
+        1.0,
+        0.86,
+        0.72
+      ]
+    },
+    {
+      "name": "fill",
+      "type": "AREA",
+      "location": [
+        4.0,
+        6.0,
+        2.4
+      ],
+      "rotation_euler_deg": [
+        72,
+        0,
+        -145
+      ],
+      "energy": 260,
+      "size": 6.0,
+      "color": [
+        0.72,
+        0.8,
+        0.86
+      ]
+    },
+    {
+      "name": "rim",
+      "type": "AREA",
+      "location": [
+        -7.0,
+        2.0,
+        3.2
+      ],
+      "rotation_euler_deg": [
+        64,
+        0,
+        -108
+      ],
+      "energy": 600,
+      "size": 3.0,
+      "color": [
+        0.8,
+        0.88,
+        0.94
+      ]
+    }
   ],
-  "layers": ["body", "body_shade", "wheels", "bodykit", "spoiler", "glass", "exhaust", "vinyl"],
+  "layers": [
+    "body",
+    "body_shade",
+    "wheels",
+    "bodykit",
+    "spoiler",
+    "glass",
+    "exhaust",
+    "vinyl"
+  ],
   "car_length_m": 4.6
 }

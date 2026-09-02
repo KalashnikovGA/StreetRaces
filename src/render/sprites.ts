@@ -35,10 +35,17 @@ export interface CarSprites {
 const LAYERS: CarLayer[] = ['body', 'shade', 'glass', 'light', 'tail', 'wheel'];
 
 /**
- * Машины, для которых спрайты уже отрендерены. Остальные пока рисуются
- * вектором — §14 велит гнать пайплайн по одной машине, а не пачкой.
+ * Машины, прошедшие пайплайн. Сейчас это вся библиотека: у семи из них
+ * исходник — процедурная модель из scripts/build-car-models.mjs, но в игре
+ * они всё равно спрайты, а не вектор.
+ *
+ * Векторная отрисовка осталась запасным путём на случай, если картинки
+ * не доехали.
  */
-export const SPRITE_READY = new Set(['bavar_c40', 'vogel190']);
+export const SPRITE_READY = new Set([
+  'zarya965', 'lada6', 'ronin_gx', 'lada_sport', 'bavar320',
+  'ronin_ss', 'kaiser_r34', 'corsa_f40', 'vogel190', 'bavar_c40',
+]);
 
 const cars = new Map<string, CarSprites | null>();
 const pending = new Map<string, Promise<CarSprites | null>>();
