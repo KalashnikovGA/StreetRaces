@@ -1,21 +1,29 @@
-/* Автосалон. Та же плотность, что и в гараже: витрина сверху, список ниже. */
+/* Автосалон. Сетка карточек и их состав — из макета. */
 
-.shop-rows .line { grid-template-columns: 26px minmax(0, 1fr) 84px 74px 132px; }
-.shop-rows .klass { font-family: var(--display); font-size: 15px; color: var(--chalk-faint); }
-.shop-rows .line[aria-current='true'] .klass { color: var(--chalk); }
-.shop-rows .owned { color: var(--gate); }
+.salon-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 12px 14px;
+}
+.salon-head h1 { font-size: 26px; }
+.salon-head .note { margin-left: auto; color: var(--chalk-faint); font-size: 12px; }
 
-/* Разделитель с условием доступа — строка из оригинала, слово в слово по смыслу */
-.gate-row {
-  padding: 8px 12px;
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   background: var(--pit);
-  border-top: 1px solid var(--concrete-lt);
-  color: var(--chalk-dim);
-  font-size: 13px;
+  margin-bottom: 8px;
 }
+.cards > * { border-left: 1px solid var(--concrete-lt); border-top: 1px solid var(--concrete-lt); }
 
-@media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
-@media (max-width: 620px) {
-  .shop-rows .line { grid-template-columns: 20px minmax(0, 1fr) 64px 104px; gap: 8px; }
-  .shop-rows .hide-narrow { display: none; }
-}
+.card-car { display: flex; flex-direction: column; padding: 12px 14px 14px; background: var(--concrete); }
+.card-car .shot { background: var(--pit); border: 1px solid var(--concrete-lt); }
+.card-car canvas { display: block; width: 100%; height: 128px; }
+.card-car h2 { font-size: 26px; margin-top: 12px; }
+.card-car .model { margin: 2px 0 10px; color: var(--sodium); font-family: var(--display); font-size: 16px; }
+.card-car .sheet td { padding: 3px 0; border: 0; }
+.card-car .actions { display: flex; gap: 8px; margin-top: 12px; }
+.card-car .actions .btn { flex: 1 1 auto; }
+.card-car .note { margin: 8px 0 0; font-size: 12px; color: var(--chalk-faint); min-height: 2.4em; }
+.card-car.owned { background: var(--pit); }

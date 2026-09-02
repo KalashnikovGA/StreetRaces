@@ -12,26 +12,33 @@
   <div class="chrome" id="chrome"></div>
 
   <div class="shell">
-    <section class="strip hero">
-      <div class="hero-grid">
-        <div class="stage">
-          <canvas id="scene"></canvas>
-        </div>
-
-        <div class="plate-card">
-          <h1 id="car-nick">Корытце</h1>
-          <p class="model" id="car-model">«Заря-965»</p>
-          <p class="pimp-note">Косметика. На заезд не влияет — ни на один балл.</p>
-
-          <p class="sub">Окраска</p>
-          <div class="swatches" id="paints"></div>
-
-          <p class="sub">Номер</p>
-          <input class="plate" id="plate" maxlength="9" value="К 348 ЕЕ" spellcheck="false" />
+    <section class="strip showcase">
+      <div class="stage"><canvas id="scene"></canvas></div>
+      <div class="card">
+        <h1 id="car-nick">Малыш</h1>
+        <p class="model" id="car-model">«Vogel 190»</p>
+        <p class="note">Косметика. На заезд не влияет — ни на один балл.</p>
+        <div class="actions">
+          <button class="btn" id="reset" type="button">Сбросить</button>
         </div>
       </div>
     </section>
 
+    <div class="tiles pimp-tabs" id="pimp-tabs"></div>
+    <div class="tiles swatches" id="paints"></div>
+
+    <section class="strip">
+      <div class="plate-head">Номер<span class="note">Свободным текстом</span></div>
+      <div class="body">
+        <input class="plate" id="plate" maxlength="9" value="К 348 ЕЕ" spellcheck="false" />
+      </div>
+    </section>
+
+    <div class="band"></div>
+    <div class="baseline">
+      <span>Окраска и номер видны всем, кто откроет ссылку на заезд</span>
+      <span class="mark"><i class="flag"></i>НА СЛАБО<i class="flag"></i></span>
+    </div>
   </div>
 
   <footer id="footer"></footer>

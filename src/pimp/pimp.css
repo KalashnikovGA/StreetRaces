@@ -1,38 +1,52 @@
 /* Pimp. Раздел называется своим именем и стоит отдельно от характеристик (§2). */
 
-.pimp-note { margin: 0 0 12px; color: var(--chalk-faint); font-size: 12px; }
+#scene { display: block; width: 100%; height: 280px; }
 
-.sub {
-  margin: 12px 0 6px;
-  font-family: var(--display);
-  font-size: 14px;
+.pimp-tabs { grid-template-columns: repeat(2, 1fr); }
+.pimp-tabs button {
+  padding: 10px 8px;
+  background: transparent;
+  border-right: 0;
   color: var(--chalk-dim);
-}
-
-.swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
-.swatches button {
-  aspect-ratio: 1;
-  border: 1px solid var(--concrete-lt);
-  border-radius: 0;
-  padding: 0;
+  font-family: var(--display);
+  font-size: 16px;
   cursor: pointer;
 }
-.swatches button[aria-pressed='true'] { outline: 2px solid var(--sodium); outline-offset: 2px; }
+.pimp-tabs button:hover { background: var(--concrete); color: var(--chalk); }
+.pimp-tabs button[aria-current='true'] { background: var(--concrete-lt); color: var(--chalk); }
 
-/* Номер свободным текстом (§4). Белая табличка на тёмном — единственное
-   светлое поле в интерфейсе, и это ровно то, чем номер является. */
+/* Образцы окраски: клетка с заливкой, названием и пометкой выбора. */
+.swatches { grid-template-columns: repeat(5, 1fr); }
+.swatches button {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 12px 8px 11px;
+  background: transparent;
+  border-right: 0;
+  color: var(--chalk-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.swatches button:hover { background: var(--concrete); }
+.swatches button i { display: block; width: 100%; height: 42px; border: 1px solid var(--concrete-lt); }
+.swatches button[aria-pressed='true'] { background: var(--concrete-lt); color: var(--chalk); }
+.swatches button[aria-pressed='true'] i { outline: 2px solid var(--sodium); outline-offset: -1px; }
+
+/* Номер свободным текстом (§4). Белая табличка — единственное светлое поле. */
 .plate {
   width: 100%;
   font-family: var(--display);
-  font-size: 20px;
-  letter-spacing: 3px;
+  font-size: 22px;
+  letter-spacing: 4px;
   text-align: center;
   text-transform: uppercase;
   color: #16181a;
   background: #d8d5ce;
   border: 1px solid #8e8b85;
   border-radius: 0;
-  padding: 6px 8px;
+  padding: 7px 8px;
 }
 
-@media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .swatches { grid-template-columns: repeat(3, 1fr); } }

@@ -73,7 +73,7 @@ const PAGE = `<!doctype html>
 </script>
 <script type="module">
 import {
-  AmbientLight, Box3, DirectionalLight, Mesh, MeshPhysicalMaterial,
+  AmbientLight, Box3, DirectionalLight, HemisphereLight, Mesh, MeshPhysicalMaterial,
   MeshStandardMaterial, OrthographicCamera, Scene, SRGBColorSpace, Vector3,
   WebGLRenderer, ACESFilmicToneMapping,
 } from 'three';
@@ -95,7 +95,7 @@ renderer.setSize(W * SS, H * SS, false);
 renderer.setPixelRatio(1);
 renderer.outputColorSpace = SRGBColorSpace;
 renderer.toneMapping = ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 0.86;
 document.body.append(renderer.domElement);
 
 const scene = new Scene();
@@ -112,7 +112,16 @@ for (const item of CONFIG.lights) {
   light.position.set(...item.location);
   scene.add(light);
 }
-scene.add(new AmbientLight(0xffffff, 0.35));
+/**
+ * Полусферический свет: сверху небо, снизу земля. На фотографии машины
+ * бортовую линию и подштамповки рисует именно это — отражение светлого верха
+ * и тёмного низа, а не диффузное затенение. Без него плоская дверь освещена
+ * ровно и после умножения на цвет становится пятном.
+ */
+scene.add(new HemisphereLight(0xdfe8f0, 0x0e1012, 0.62));
+
+// Общего света ровно столько, чтобы тень не проваливалась в чёрное.
+scene.add(new AmbientLight(0xffffff, 0.06));
 
 const readback = document.createElement('canvas');
 readback.width = W; readback.height = H;

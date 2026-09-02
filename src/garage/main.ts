@@ -1,10 +1,11 @@
 /**
- * Гараж. Порядок блоков взят из оригинала и не переставляется (§9):
- * машина с цифрами и действиями → ряд запчастей → места в гараже →
- * последние гонки → сводка за карьеру.
+ * Гараж. Порядок блоков взят из макета и не переставляется:
+ * витрина → ряд запчастей → места в гараже → полоса уровня →
+ * последние гонки → сводка за карьеру → финишная лента.
  *
- * Косметика живёт отдельной вкладкой Pimp (§2), характеристики показаны
- * числами, а не полосками — числа в этой игре сравнивают.
+ * Отделка — по разделу «Дизайн» в CLAUDE.md: характеристики числами,
+ * нулевые скругления, натриевый акцент один на экран и стоит на главном
+ * действии.
  */
 
 import '../ui/theme.css';
@@ -17,6 +18,7 @@ import { mountChrome, mountFooter } from '../ui/chrome.ts';
 import {
   career, currentIndex, formatCoins, lastRaces, owned, partPrice, purse, resaleValue,
 } from '../ui/state.ts';
+import { drawThumb } from '../ui/thumb.ts';
 import { Stage } from './stage.ts';
 
 const SPEC_LABELS: Record<SpecKey, string> = {
@@ -34,7 +36,7 @@ const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) 
 let index = currentIndex();
 let stage: Stage | null = null;
 
-// ── машина ───────────────────────────────────────────────────────────────────
+// ── витрина ──────────────────────────────────────────────────────────────────
 
 function renderCard(): void {
   const entry = owned[index]!;
@@ -45,33 +47,34 @@ function renderCard(): void {
   $('car-nick').textContent = model.nick;
   $('car-model').textContent = model.name;
 
-  const rows: [string, string][] = [
+  const facts: [string, string][] = [
     ['Мощность', `${horsepower(entry.car)} л.с.`],
+    ['Стоимость', formatCoins(resaleValue(entry.car))],
     ['Рейтинг', rating.toFixed(0)],
-    ['Класс', `${model.klass} (${range.min}–${range.max})`],
-    ['В цене', `${formatCoins(resaleValue(entry.car))} монет`],
-    ['Побед', String(entry.wins)],
-    ['Слил', String(entry.losses)],
+    ['Класс', model.klass],
   ];
-  const sheet = $('car-sheet');
-  sheet.replaceChildren(...rows.map(([label, value], i) => {
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.textContent = label;
-    const val = document.createElement('td');
-    val.textContent = value;
-    // Рейтинг — та самая цифра, которую в оригинале сравнивали в первую очередь.
-    if (i === 1) val.className = 'big';
-    tr.append(td, val);
-    return tr;
+  $('car-facts').replaceChildren(...facts.map(([label, value]) => {
+    const row = document.createElement('div');
+    row.append(`${label}:`);
+    const strong = document.createElement('b');
+    strong.textContent = value;
+    row.append(strong);
+    return row;
   }));
 
   const left = range.max - rating;
   $('ceiling').textContent = left < 0.5
-    ? `Класс ${model.klass} выбран до потолка. Дальше — только следующая машина.`
-    : `До потолка класса ${model.klass} ещё ${left.toFixed(0)} баллов рейтинга.`;
+    ? `Класс ${model.klass} выбран до потолка`
+    : `До потолка класса ${model.klass} ещё ${left.toFixed(0)} баллов`;
 
   ($('race') as HTMLAnchorElement).href = `/?car=${index}`;
+
+  // Полоса уровня показывает прокачку внутри класса — ту же цифру, что и рейтинг.
+  const done = (rating - range.min) / (range.max - range.min);
+  $('level-label').textContent = `Класс ${model.klass}`;
+  ($('level-fill') as HTMLElement).style.width = `${Math.round(done * 100)}%`;
+  $('level-left').textContent = left < 0.5 ? 'потолок' : `${left.toFixed(0)} до потолка`;
+
   resetSell();
 }
 
@@ -131,7 +134,7 @@ function renderParts(): void {
 
     const note = document.createElement('span');
     note.className = 'price';
-    note.textContent = full ? 'некуда' : maxed ? 'потолок класса' : `${formatCoins(price)} монет`;
+    note.textContent = full ? 'некуда' : maxed ? 'потолок' : formatCoins(price);
 
     button.append(name, value, note);
     button.addEventListener('click', () => {
@@ -139,69 +142,49 @@ function renderParts(): void {
       entry.car.specs[key] = level + 1;
       renderCard();
       renderParts();
-      renderCarList();
+      renderSlots();
       mountChrome('garage');
     });
     return button;
   }));
-
-  $('parts-note').textContent = maxed
-    ? 'Потолок класса взят: следующие баллы только с новой машиной'
-    : 'Уровень цифрой. Цена растёт с каждым следующим';
 }
 
 // ── места в гараже ───────────────────────────────────────────────────────────
 
-function renderCarList(): void {
-  const header = document.createElement('li');
-  const headLine = document.createElement('div');
-  headLine.className = 'line head';
-  headLine.append(
-    cell('', ''), cell('', 'Машина'), cell('num', 'мощность'),
-    cell('num', 'рейтинг'), cell('num hide-narrow', 'побед'),
-  );
-  header.append(headLine);
-
-  $('car-list').replaceChildren(header, ...owned.map((entry, i) => {
+function renderSlots(): void {
+  const cells: HTMLElement[] = owned.map((entry, i) => {
     const model = getModel(entry.car.modelId);
-    const item = document.createElement('li');
-    const line = document.createElement('button');
-    line.type = 'button';
-    line.className = 'line';
-    line.setAttribute('aria-current', String(i === index));
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'slot';
+    cell.setAttribute('aria-current', String(i === index));
 
-    line.append(
-      cell('klass', model.klass),
-      stack(model.nick, model.name),
-      cell('num', `${horsepower(entry.car)} л.с.`),
-      cell('num', strength(entry.car).toFixed(0)),
-      cell('num hide-narrow', `${entry.wins} побед`),
-    );
-    line.addEventListener('click', () => select(i));
-    item.append(line);
-    return item;
-  }));
+    const canvas = document.createElement('canvas');
+    const nick = document.createElement('span');
+    nick.className = 'nick';
+    nick.textContent = model.nick;
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = `${horsepower(entry.car)} л.с., рейтинг ${strength(entry.car).toFixed(0)}`;
 
-  $('slots-note').textContent = `Занято ${owned.length} из ${career.slots}`;
-}
+    cell.append(canvas, nick, num);
+    cell.addEventListener('click', () => select(i));
+    // Канва обмеряется по месту, поэтому рисуем после вставки в документ.
+    queueMicrotask(() => drawThumb(canvas, entry.car.modelId, entry.paint));
+    return cell;
+  });
 
-function cell(className: string, text: string): HTMLElement {
-  const node = document.createElement('span');
-  node.className = className;
-  node.textContent = text;
-  return node;
-}
+  for (let i = owned.length; i < career.slots; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'slot empty';
+    const plate = document.createElement('span');
+    plate.className = 'plate';
+    plate.textContent = 'место свободно';
+    cell.append(plate);
+    cells.push(cell);
+  }
 
-function stack(title: string, sub: string): HTMLElement {
-  const box = document.createElement('span');
-  const top = document.createElement('span');
-  top.className = 'title';
-  top.textContent = title;
-  const bottom = document.createElement('span');
-  bottom.className = 'sub';
-  bottom.textContent = sub;
-  box.append(top, document.createElement('br'), bottom);
-  return box;
+  $('slots').replaceChildren(...cells);
 }
 
 // ── лента и сводка ───────────────────────────────────────────────────────────
@@ -218,9 +201,7 @@ function renderLog(): void {
     who.textContent = entry.rival;
     const tail = document.createElement('span');
     tail.className = entry.won ? 'won' : 'lost';
-    tail.textContent = entry.won
-      ? ' вызвал на гонку и слил'
-      : ' вызвал на гонку и забрал';
+    tail.textContent = entry.won ? ' вызвал на гонку и слил' : ' вызвал на гонку и забрал';
     text.append(who, tail);
 
     const stake = document.createElement('span');
@@ -284,7 +265,7 @@ function select(next: number): void {
 
   renderCard();
   renderParts();
-  renderCarList();
+  renderSlots();
   renderLog();
 
   stage ??= new Stage({ canvas: $('scene') as unknown as HTMLCanvasElement });

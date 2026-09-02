@@ -1,27 +1,22 @@
 /**
- * Автосалон. Структура из оригинала: сверху выбранная модель крупно с ценой
- * и кнопкой покупки, ниже — плотный список всей площадки со строкой о том,
- * при каком условии откроются машины помощнее.
+ * Автосалон. Сетка карточек и их состав взяты из макета: снимок машины,
+ * марка крупно, модель акцентом, характеристики строками, действие внизу.
  *
- * Условие у нас классовое, а не уровневое (§4): доступ покупается классом,
- * и это же место, где деньги дают доступ к высоким ставкам, а не превосходство.
+ * Фильтров по классам нет намеренно: в игре две машины, и фильтр был бы
+ * мёртвой кнопкой. Вернётся вместе с третьей.
  */
 
 import '../ui/theme.css';
-import '../garage/garage.css';
 import './shop.css';
 import {
   CAR_MODELS, CLASS_ORDER, CLASS_RANGES, getModel, horsepower, stockCar,
   type CarClass, type CarModel,
 } from '../core/index.ts';
-import { Stage } from '../garage/stage.ts';
 import { mountChrome, mountFooter } from '../ui/chrome.ts';
 import { formatCoins, owned, purse } from '../ui/state.ts';
+import { drawThumb } from '../ui/thumb.ts';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
-
-let picked = 0;
-let stage: Stage | null = null;
 
 /** Лучший класс в гараже. От него зависит, что уже можно взять. */
 function bestClass(): CarClass {
@@ -46,159 +41,83 @@ function ownedCount(model: CarModel): number {
   return owned.filter((entry) => entry.car.modelId === model.id).length;
 }
 
-// ── витрина ──────────────────────────────────────────────────────────────────
+function buy(model: CarModel): void {
+  if (locked(model) || model.priceCoins > purse.coins) return;
+  purse.coins -= model.priceCoins;
+  owned.push({ car: stockCar(model.id), paint: 'white', plate: 'Б 000 ЕЗ', wins: 0, losses: 0 });
+  // Купил — смотришь на неё в гараже. Так же вёл себя оригинал.
+  location.href = `/garage.html?car=${owned.length - 1}`;
+}
 
-function renderPick(): void {
-  const model = CAR_MODELS[picked]!;
+function card(model: CarModel): HTMLElement {
   const car = stockCar(model.id);
   const range = CLASS_RANGES[model.klass];
+  const mine = ownedCount(model) > 0;
 
-  $('pick-nick').textContent = model.nick;
-  $('pick-model').textContent = model.name;
+  const box = document.createElement('article');
+  box.className = mine ? 'card-car owned' : 'card-car';
+
+  const shot = document.createElement('div');
+  shot.className = 'shot';
+  const canvas = document.createElement('canvas');
+  shot.append(canvas);
+
+  const name = document.createElement('h2');
+  name.textContent = model.nick;
+  const label = document.createElement('p');
+  label.className = 'model';
+  label.textContent = model.name;
 
   const rows: [string, string][] = [
     ['Мощность', `${horsepower(car)} л.с.`],
-    ['Рейтинг', String(model.baseStrength)],
     ['Класс', `${model.klass} (${range.min}–${range.max})`],
-    ['Потолок класса', String(range.max)],
-    ['Цена', model.priceCoins === 0 ? 'даром' : `${formatCoins(model.priceCoins)} монет`],
+    ['Рейтинг', String(model.baseStrength)],
+    ['Стоимость', model.priceCoins === 0 ? 'даром' : `${formatCoins(model.priceCoins)} монет`],
   ];
-
-  $('pick-sheet').replaceChildren(...rows.map(([label, value], i) => {
+  const sheet = document.createElement('table');
+  sheet.className = 'sheet';
+  for (const [key, value] of rows) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.textContent = label;
+    td.textContent = key;
     const val = document.createElement('td');
     val.textContent = value;
-    if (i === 4) val.className = 'big';
     tr.append(td, val);
-    return tr;
-  }));
+    sheet.append(tr);
+  }
 
-  const buy = $('buy') as HTMLButtonElement;
+  const note = document.createElement('p');
+  note.className = 'note';
   const short = model.priceCoins - purse.coins;
-  buy.disabled = locked(model) || short > 0;
-  buy.textContent = 'Купить';
-
-  $('pick-note').textContent = locked(model)
+  note.textContent = locked(model)
     ? `Класс ${model.klass} закрыт: сначала машина класса ${CLASS_ORDER[openLimit()]}`
-    : short > 0
-      ? `Не хватает ${formatCoins(short)} монет`
-      : ownedCount(model) > 0
-        ? 'Такая уже стоит в гараже. Вторая займёт ещё одно место'
+    : mine
+      ? 'Уже стоит в гараже. Вторая займёт ещё одно место'
+      : short > 0
+        ? `Не хватает ${formatCoins(short)} монет`
         : 'Сток. Прокачка добьёт до потолка класса';
 
-  loadStage(model);
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = mine ? 'btn' : 'btn primary';
+  button.textContent = 'Купить';
+  button.disabled = locked(model) || short > 0;
+  button.addEventListener('click', () => buy(model));
+  actions.append(button);
+
+  box.append(shot, name, label, sheet, note, actions);
+  queueMicrotask(() => drawThumb(canvas, model.id, 'white'));
+  return box;
 }
 
-function loadStage(model: CarModel): void {
-  stage ??= new Stage({ canvas: $('scene') as unknown as HTMLCanvasElement });
-  // Машина на площадке стоит в заводском белом: окраска — это уже Pimp.
-  stage.setCar(model.id, 'white');
-  stage.start();
-}
-
-// ── список площадки ──────────────────────────────────────────────────────────
-
-function renderList(): void {
-  const list = $('models');
-  const items: HTMLElement[] = [];
-  let gateShown = false;
-
-  const header = document.createElement('li');
-  const headLine = document.createElement('div');
-  headLine.className = 'line head';
-  for (const [className, text] of [['', ''], ['', 'Машина'], ['num', 'мощность'],
-    ['num hide-narrow', 'рейтинг'], ['num', 'цена']] as [string, string][]) {
-    const node = document.createElement('span');
-    node.className = className;
-    node.textContent = text;
-    headLine.append(node);
-  }
-  header.append(headLine);
-  items.push(header);
-
-  CAR_MODELS.forEach((model, i) => {
-    if (locked(model) && !gateShown) {
-      gateShown = true;
-      const gate = document.createElement('li');
-      const note = document.createElement('div');
-      note.className = 'gate-row';
-      note.textContent =
-        `Машины класса ${model.klass} и выше откроются, когда в гараже появится класс ${CLASS_ORDER[openLimit()]}.`;
-      gate.append(note);
-      items.push(gate);
-    }
-
-    const car = stockCar(model.id);
-    const item = document.createElement('li');
-    const line = document.createElement('button');
-    line.type = 'button';
-    line.className = 'line';
-    line.disabled = locked(model);
-    line.setAttribute('aria-current', String(i === picked));
-
-    const klass = document.createElement('span');
-    klass.className = 'klass';
-    klass.textContent = model.klass;
-
-    const name = document.createElement('span');
-    const title = document.createElement('span');
-    title.className = 'title';
-    title.textContent = model.nick;
-    const sub = document.createElement('span');
-    sub.className = 'sub';
-    sub.textContent = model.name;
-    name.append(title, document.createElement('br'), sub);
-
-    const power = document.createElement('span');
-    power.className = 'num';
-    power.textContent = `${horsepower(car)} л.с.`;
-
-    const rating = document.createElement('span');
-    rating.className = 'num hide-narrow';
-    rating.textContent = String(model.baseStrength);
-
-    const price = document.createElement('span');
-    price.className = ownedCount(model) > 0 ? 'num owned' : 'num';
-    price.textContent = ownedCount(model) > 0
-      ? 'уже в гараже'
-      : model.priceCoins === 0 ? 'даром' : `${formatCoins(model.priceCoins)} монет`;
-
-    line.append(klass, name, power, rating, price);
-    line.addEventListener('click', () => {
-      picked = i;
-      renderPick();
-      renderList();
-    });
-    item.append(line);
-    items.push(item);
-  });
-
-  list.replaceChildren(...items);
+function render(): void {
+  $('models').replaceChildren(...CAR_MODELS.map(card));
   $('shop-note').textContent = `Открыты классы до ${CLASS_ORDER[openLimit()]}`;
+  $('purse-note').textContent = `В банке ${formatCoins(purse.coins)} монет`;
 }
-
-// ── покупка ──────────────────────────────────────────────────────────────────
-
-$('buy').addEventListener('click', () => {
-  const model = CAR_MODELS[picked]!;
-  if (locked(model) || model.priceCoins > purse.coins) return;
-  purse.coins -= model.priceCoins;
-  owned.push({
-    car: stockCar(model.id),
-    paint: 'white',
-    plate: 'Б 000 ЕЗ',
-    wins: 0,
-    losses: 0,
-  });
-  // Купил — смотришь на неё в гараже. Так же вёл себя оригинал.
-  location.href = `/garage.html?car=${owned.length - 1}`;
-});
-
-window.addEventListener('resize', () => stage?.resize());
 
 mountChrome('shop');
 mountFooter();
-renderPick();
-renderList();
+render();

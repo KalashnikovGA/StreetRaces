@@ -12,35 +12,20 @@
   <div class="chrome" id="chrome"></div>
 
   <div class="shell">
-    <!-- Витрина выбранной модели: слева машина, справа цифры и покупка -->
-    <section class="strip hero">
-      <div class="hero-grid">
-        <div class="stage">
-          <canvas id="scene"></canvas>
-        </div>
-
-        <div class="plate-card">
-          <h1 id="pick-nick">Корытце</h1>
-          <p class="model" id="pick-model">«Заря-965»</p>
-          <table class="sheet card-sheet" id="pick-sheet"></table>
-          <p class="ceiling" id="pick-note"></p>
-          <div class="actions">
-            <button class="btn primary" id="buy" type="button">Купить</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Список моделей: строки, плотно, с ценой и классом -->
     <section class="strip">
-      <header>
-        <h2>Что стоит на площадке</h2>
+      <div class="salon-head">
+        <h1>Автосалон</h1>
         <span class="note" id="shop-note"></span>
-      </header>
-      <div class="body tight">
-        <ul class="rows shop-rows" id="models"></ul>
       </div>
     </section>
+
+    <div class="cards" id="models"></div>
+
+    <div class="band"></div>
+    <div class="baseline">
+      <span id="purse-note"></span>
+      <span class="mark"><i class="flag"></i>НА СЛАБО<i class="flag"></i></span>
+    </div>
   </div>
 
   <footer id="footer"></footer>

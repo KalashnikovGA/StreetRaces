@@ -12,60 +12,55 @@
   <div class="chrome" id="chrome"></div>
 
   <div class="shell">
-    <!-- Машина: слева витрина, справа цифры и действия. Порядок из оригинала. -->
-    <section class="strip hero">
-      <div class="hero-grid">
-        <div class="stage">
-          <canvas id="scene"></canvas>
-        </div>
-
-        <div class="plate-card">
-          <h1 id="car-nick">Корытце</h1>
-          <p class="model" id="car-model">«Заря-965»</p>
-          <table class="sheet card-sheet" id="car-sheet"></table>
-          <p class="ceiling" id="ceiling"></p>
-          <div class="actions">
-            <a class="btn primary" id="race" href="/">На слабо</a>
-            <button class="btn" id="sell" type="button">Продать</button>
-          </div>
+    <!-- Витрина: слева машина, справа цифры и действия -->
+    <section class="strip showcase">
+      <div class="stage"><canvas id="scene"></canvas></div>
+      <div class="card">
+        <h1 id="car-nick">Малыш</h1>
+        <p class="model" id="car-model">«Vogel 190»</p>
+        <div class="facts" id="car-facts"></div>
+        <p class="note" id="ceiling"></p>
+        <div class="actions">
+          <a class="btn primary" id="race" href="/">На слабо</a>
+          <button class="btn" id="sell" type="button">Продать</button>
         </div>
       </div>
     </section>
 
-    <!-- Запчасти: тот же ряд деталей с уровнями, что стоял под машиной (§4) -->
-    <section class="strip">
-      <header>
-        <h2>Запчасти</h2>
-        <span class="note" id="parts-note"></span>
-      </header>
-      <div class="parts" id="parts"></div>
-    </section>
+    <!-- Запчасти: ряд клеток с уровнем цифрой -->
+    <div class="tiles parts" id="parts"></div>
 
-    <!-- Гараж списком, не сеткой карточек (§9) -->
+    <!-- Места в гараже: клетки с машинами, занятые и пустые -->
+    <div class="tiles slots" id="slots"></div>
+
+    <!-- Полоса уровня -->
+    <div class="level">
+      <span id="level-label">Класс A</span>
+      <span class="rail"><i id="level-fill"></i></span>
+      <span id="level-left"></span>
+    </div>
+
+    <!-- Лента вызовов -->
     <section class="strip">
-      <header>
-        <h2>Места в гараже</h2>
-        <span class="note" id="slots-note"></span>
-      </header>
-      <div class="body tight">
-        <ul class="rows garage-rows" id="car-list"></ul>
+      <div class="plate-head">
+        Последние гонки
+        <span class="note">Важен не рекорд, а кто именно тебя обошёл</span>
       </div>
-    </section>
-
-    <section class="strip">
-      <header>
-        <h2>Последние гонки</h2>
-        <span class="note">Двор против двора: важен не рекорд, а кто именно тебя обошёл</span>
-      </header>
       <div class="body tight">
         <ul class="rows log-rows" id="log"></ul>
       </div>
     </section>
 
+    <!-- Сводка: две колонки -->
     <section class="strip">
-      <header><h2>Всего за карьеру</h2></header>
       <div class="career" id="career"></div>
     </section>
+
+    <div class="band"></div>
+    <div class="baseline">
+      <span id="progress">Заездов в классе: 370</span>
+      <span class="mark"><i class="flag"></i>НА СЛАБО<i class="flag"></i></span>
+    </div>
   </div>
 
   <footer id="footer"></footer>

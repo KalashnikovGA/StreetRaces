@@ -1,62 +1,53 @@
-/* Гараж. Плотность важнее воздуха: блоки идут встык, отступы минимальные. */
+/* Гараж. Порядок и плотность блоков — из макета, отделка — по CLAUDE.md. */
 
-/* Единственный градиент во всём интерфейсе: пятно натриевого фонаря
-   над машиной в шапке гаража. Разрешено дизайн-правилами прямым текстом. */
-.hero {
-  background:
-    radial-gradient(120% 90% at 22% -20%, rgba(224, 123, 57, 0.16), rgba(224, 123, 57, 0) 62%),
-    var(--concrete);
-}
-
-.hero-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-}
-
-.stage { position: relative; border-right: 1px solid var(--concrete-lt); background: var(--pit); }
 #scene { display: block; width: 100%; height: 300px; }
 
-.plate-card { padding: 12px 14px; display: flex; flex-direction: column; }
-.plate-card h1 { font-size: 34px; font-weight: 600; }
-.plate-card .model { margin: 2px 0 10px; color: var(--chalk-dim); }
-
-.card-sheet td { padding: 4px 0; }
-.card-sheet td:first-child { width: 45%; }
-
-.ceiling { margin: 10px 0 0; color: var(--chalk-faint); font-size: 12px; }
-.actions { display: flex; gap: 8px; margin-top: auto; padding-top: 14px; }
-.actions .btn { flex: 1 1 auto; }
-
-/* Ряд запчастей: семь клеток встык, уровень цифрой (не полоской) */
-.parts { display: grid; grid-template-columns: repeat(7, 1fr); }
+/* Ряд запчастей: уровень цифрой, без полосок и без иконок. */
+.parts { grid-template-columns: repeat(7, 1fr); }
 
 .part {
   display: grid;
-  gap: 2px;
-  padding: 9px 10px 10px;
+  justify-items: center;
+  gap: 4px;
+  padding: 10px 6px 11px;
   background: transparent;
-  border: 0;
-  border-left: 1px solid var(--concrete-lt);
+  border-right: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.part:hover { background: var(--concrete); }
+.part[disabled] { cursor: default; color: var(--chalk-faint); }
+.part[disabled]:hover { background: transparent; }
+.part .name { font-size: 12px; color: var(--chalk-dim); }
+.part .level { font-family: var(--display); font-size: 26px; line-height: 1; }
+.part .level small { font-size: 13px; color: var(--chalk-faint); }
+.part .price { font-size: 11px; color: var(--chalk-faint); }
+.part[disabled] .level { color: var(--chalk-faint); }
+
+/* Места в гараже: клетки с машиной. Пустое место остаётся видимым. */
+.slots { grid-template-columns: repeat(4, 1fr); }
+
+.slot {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px 10px;
+  background: transparent;
+  border-right: 0;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.part:first-child { border-left: 0; }
-.part:hover { background: var(--concrete-lt); }
-.part[disabled] { cursor: default; color: var(--chalk-faint); }
-.part[disabled]:hover { background: transparent; }
-
-.part .name { font-size: 12px; color: var(--chalk-dim); }
-.part .level { font-family: var(--display); font-size: 22px; line-height: 1; }
-.part .level small { font-size: 13px; color: var(--chalk-faint); }
-.part .price { font-size: 12px; color: var(--chalk-faint); }
-.part[disabled] .level { color: var(--chalk-faint); }
-
-/* Список машин */
-.garage-rows .line { grid-template-columns: 26px minmax(0, 1fr) 76px 74px 88px; }
-.garage-rows .klass { font-family: var(--display); font-size: 15px; color: var(--chalk-faint); }
-.garage-rows .line[aria-current='true'] .klass { color: var(--chalk); }
+.slot:hover { background: var(--concrete); }
+.slot canvas { display: block; width: 100%; height: 72px; }
+.slot .nick { font-family: var(--display); font-size: 16px; }
+.slot .num { font-size: 12px; color: var(--chalk-faint); }
+.slot[aria-current='true'] { background: var(--concrete-lt); }
+.slot[aria-current='true'] .nick { color: var(--chalk); }
+.slot.empty { cursor: default; color: var(--chalk-faint); }
+.slot.empty:hover { background: transparent; }
+.slot.empty .plate { height: 72px; display: grid; place-items: center; font-size: 12px; }
 
 /* Лента вызовов */
 .log-rows .line { grid-template-columns: minmax(0, 1fr) 96px 128px; cursor: default; }
@@ -64,24 +55,19 @@
 .log-rows .who { font-weight: 500; }
 .log-rows .answer { text-align: right; }
 
-/* Сводка карьеры: две колонки, как в оригинале */
+/* Сводка карьеры: две колонки, как в макете */
 .career { display: grid; grid-template-columns: 1fr 1fr; }
 .career table { border-collapse: collapse; width: 100%; }
 .career table:first-child { border-right: 1px solid var(--concrete-lt); }
 
 @media (max-width: 900px) {
-  .hero-grid { grid-template-columns: 1fr; }
-  .stage { border-right: 0; border-bottom: 1px solid var(--concrete-lt); }
   .parts { grid-template-columns: repeat(4, 1fr); }
-  .part:nth-child(4n + 1) { border-left: 0; }
-  .part:nth-child(n + 5) { border-top: 1px solid var(--concrete-lt); }
+  .slots { grid-template-columns: repeat(2, 1fr); }
   .career { grid-template-columns: 1fr; }
   .career table:first-child { border-right: 0; border-bottom: 1px solid var(--concrete-lt); }
 }
 
 @media (max-width: 620px) {
-  .garage-rows .line { grid-template-columns: 20px minmax(0, 1fr) 64px 42px; gap: 8px; }
-  .garage-rows .line .hide-narrow { display: none; }
   .log-rows .line { grid-template-columns: minmax(0, 1fr) 110px; }
   .log-rows .stake { display: none; }
 }
