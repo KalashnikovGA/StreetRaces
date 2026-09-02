@@ -164,7 +164,7 @@ function drawSpriteCar(
   // Блики сняты на чёрном, поэтому кладутся сложением: тёмная окраска
   // перестаёт быть плоской заливкой, светлая не выгорает.
   ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = 0.5;
+  ctx.globalAlpha = 0.38;
   ctx.drawImage(images.shade, dx, dy, frameW, frameH);
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;

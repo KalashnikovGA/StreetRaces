@@ -83,8 +83,15 @@ const CONFIG = JSON.parse(document.getElementById('config').textContent);
 const W = CONFIG.render.resolution_x;
 const H = CONFIG.render.resolution_y;
 
+/**
+ * Суперсэмплинг: сцена рисуется вдвое крупнее и ужимается до кадра. Обычного
+ * сглаживания мало — на низкополигональном кузове кромка всё равно остаётся
+ * ступенчатой, а машина в гараже показана крупно.
+ */
+const SS = 2;
+
 const renderer = new WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-renderer.setSize(W, H, false);
+renderer.setSize(W * SS, H * SS, false);
 renderer.setPixelRatio(1);
 renderer.outputColorSpace = SRGBColorSpace;
 renderer.toneMapping = ACESFilmicToneMapping;
@@ -114,7 +121,8 @@ const ctx = readback.getContext('2d', { willReadFrequently: true });
 function shoot() {
   renderer.render(scene, camera);
   ctx.clearRect(0, 0, W, H);
-  ctx.drawImage(renderer.domElement, 0, 0);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(renderer.domElement, 0, 0, W, H);
   return { png: readback.toDataURL('image/png'), pixels: ctx.getImageData(0, 0, W, H).data };
 }
 
@@ -205,9 +213,11 @@ async function renderCar(root) {
 
   const white = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.66, metalness: 0.0 });
   // Блики снимаются на чёрном: в кадр попадает только то, что даёт лак.
+  // Лак нарочно матовее настоящего: острый блик обводит каждую складку
+  // децимированной геометрии и превращает её в царапину.
   const gloss = new MeshPhysicalMaterial({
-    color: 0x000000, roughness: 0.24, metalness: 0.0,
-    clearcoat: 1.0, clearcoatRoughness: 0.12,
+    color: 0x000000, roughness: 0.42, metalness: 0.0,
+    clearcoat: 0.8, clearcoatRoughness: 0.3,
   });
   const original = new Map();
   for (const list of Object.values(groups)) {

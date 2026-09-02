@@ -93,15 +93,24 @@ const CELL = Number(new URLSearchParams(location.search).get('cell'));
 
 window.done = null;
 
-/** Слияние вершин по решётке: ячейка -> одна вершина, вырожденные грани вон. */
+/**
+ * Слияние вершин по решётке: ячейка -> одна вершина, вырожденные грани вон.
+ *
+ * Нормали берутся из исходника и усредняются по ячейке, а не считаются заново
+ * по огрублённой сетке. Это принципиально: затенение держится на нормалях,
+ * и пересчёт по децимированной геометрии делает гладкий кузов гранёным.
+ */
 function cluster(geometry, cell) {
   const pos = geometry.getAttribute('position');
+  const nor = geometry.getAttribute('normal');
   const index = geometry.getIndex();
   const count = index ? index.count : pos.count;
   const at = (i) => (index ? index.getX(i) : i);
 
   const map = new Map();
   const verts = [];
+  const norms = [];
+  const hits = [];
   const remap = new Int32Array(pos.count);
 
   for (let i = 0; i < pos.count; i++) {
@@ -112,7 +121,15 @@ function cluster(geometry, cell) {
       slot = verts.length / 3;
       map.set(key, slot);
       verts.push(x, y, z);
+      norms.push(0, 0, 0);
+      hits.push(0);
     }
+    if (nor) {
+      norms[slot * 3] += nor.getX(i);
+      norms[slot * 3 + 1] += nor.getY(i);
+      norms[slot * 3 + 2] += nor.getZ(i);
+    }
+    hits[slot]++;
     remap[i] = slot;
   }
 
@@ -126,7 +143,19 @@ function cluster(geometry, cell) {
   const out = new BufferGeometry();
   out.setAttribute('position', new Float32BufferAttribute(verts, 3));
   out.setIndex(tris);
-  out.computeVertexNormals();
+
+  if (nor) {
+    for (let i = 0; i < hits.length; i++) {
+      const x = norms[i * 3], y = norms[i * 3 + 1], z = norms[i * 3 + 2];
+      const len = Math.hypot(x, y, z) || 1;
+      norms[i * 3] = x / len;
+      norms[i * 3 + 1] = y / len;
+      norms[i * 3 + 2] = z / len;
+    }
+    out.setAttribute('normal', new Float32BufferAttribute(norms, 3));
+  } else {
+    out.computeVertexNormals();
+  }
   return out;
 }
 
@@ -158,30 +187,68 @@ new GLTFLoader().load('/car.glb', (gltf) => {
     const geometry = new BufferGeometry();
     const src = node.geometry.index ? node.geometry.toNonIndexed() : node.geometry;
     geometry.setAttribute('position', src.getAttribute('position').clone());
+    const normal = src.getAttribute('normal');
+    if (normal) geometry.setAttribute('normal', normal.clone());
+    // applyMatrix4 сам приводит нормали нормальной матрицей — вращение
+    // и масштаб доедут до них правильно.
     geometry.applyMatrix4(node.matrixWorld);
     buckets.get(hit[0]).push(geometry);
   });
 
   // Габарит в единицах исходника: решётка задаётся в метрах, а модель
   // приходит в своём масштабе — без пересчёта ячейка врёт в сотни раз.
-  const merged = new Map();
   const whole = new Box3();
-  for (const [name, list] of buckets) {
-    if (list.length === 0) continue;
-    const one = BufferGeometryUtils.mergeGeometries(list, false);
-    one.computeBoundingBox();
-    whole.union(one.boundingBox);
-    merged.set(name, one);
+  for (const list of buckets.values()) {
+    for (const geometry of list) {
+      geometry.computeBoundingBox();
+      whole.union(geometry.boundingBox);
+    }
   }
   const rawSize = whole.getSize(new Vector3());
   const cellUnits = CELL * (Math.max(rawSize.x, rawSize.z) / LENGTH_M);
 
+  /**
+   * Решётка накладывается на каждый исходный меш отдельно, а не на слитый слой.
+   * Иначе соседние панели — дверь и крыло, порог и юбка — свариваются в одну
+   * вершину, и по стыкам расходятся щели. Именно они и читаются как царапины.
+   *
+   * Мелкие детали не трогаем совсем: там нечего экономить, а испортить легко.
+   */
+  const KEEP_WHOLE = 240;
+
+  // mergeGeometries требует одинакового набора атрибутов и одинаковой
+  // индексации у всех кусков — приводим к общему виду.
+  const ready = (geometry) => {
+    if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
+    if (!geometry.getIndex()) {
+      const n = geometry.getAttribute('position').count;
+      geometry.setIndex(Array.from({ length: n }, (_, i) => i));
+    }
+    return geometry;
+  };
+
+  const merged = new Map();
+  for (const [name, list] of buckets) {
+    if (list.length === 0) continue;
+    const pieces = list.map((geometry) => {
+      const tris = geometry.getAttribute('position').count / 3;
+      return ready(tris <= KEEP_WHOLE ? geometry : cluster(geometry, cellUnits));
+    });
+    merged.set(name, {
+      before: list.reduce((sum, g) => sum + g.getAttribute('position').count / 3, 0),
+      geometry: BufferGeometryUtils.mergeGeometries(pieces, false),
+    });
+  }
+
   const group = new Group();
   const stats = {};
-  for (const [name, geometry] of merged) {
-    const before = geometry.getAttribute('position').count / 3;
-    const decimated = cluster(geometry, cellUnits);
-    stats[name] = { before: Math.round(before), after: decimated.getIndex().count / 3 };
+  for (const [name, item] of merged) {
+    const { geometry, before } = item;
+    const decimated = geometry;
+    const faces = decimated.getIndex()
+      ? decimated.getIndex().count / 3
+      : decimated.getAttribute('position').count / 3;
+    stats[name] = { before: Math.round(before), after: Math.round(faces) };
     const material = new MeshStandardMaterial(LOOK[name]);
     material.name = name;
     const mesh = new Mesh(decimated, material);
