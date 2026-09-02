@@ -120,10 +120,16 @@ function cluster(geometry, cell) {
     if (slot === undefined) {
       slot = verts.length / 3;
       map.set(key, slot);
-      verts.push(x, y, z);
+      verts.push(0, 0, 0);
       norms.push(0, 0, 0);
       hits.push(0);
     }
+    // Вершина ячейки — центр тяжести попавших в неё, а не первая из них.
+    // Первая сдвигает поверхность на целую ячейку в случайную сторону,
+    // и на гладкой панели это читается как вмятина.
+    verts[slot * 3] += x;
+    verts[slot * 3 + 1] += y;
+    verts[slot * 3 + 2] += z;
     if (nor) {
       norms[slot * 3] += nor.getX(i);
       norms[slot * 3 + 1] += nor.getY(i);
@@ -138,6 +144,12 @@ function cluster(geometry, cell) {
     const a = remap[at(i)], b = remap[at(i + 1)], c = remap[at(i + 2)];
     if (a === b || b === c || a === c) continue;
     tris.push(a, b, c);
+  }
+
+  for (let i = 0; i < hits.length; i++) {
+    verts[i * 3] /= hits[i];
+    verts[i * 3 + 1] /= hits[i];
+    verts[i * 3 + 2] /= hits[i];
   }
 
   const out = new BufferGeometry();

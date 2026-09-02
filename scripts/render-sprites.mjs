@@ -95,7 +95,7 @@ renderer.setSize(W * SS, H * SS, false);
 renderer.setPixelRatio(1);
 renderer.outputColorSpace = SRGBColorSpace;
 renderer.toneMapping = ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.86;
+renderer.toneMappingExposure = 0.76;
 document.body.append(renderer.domElement);
 
 const scene = new Scene();
@@ -118,7 +118,7 @@ for (const item of CONFIG.lights) {
  * и тёмного низа, а не диффузное затенение. Без него плоская дверь освещена
  * ровно и после умножения на цвет становится пятном.
  */
-scene.add(new HemisphereLight(0xdfe8f0, 0x0e1012, 0.62));
+scene.add(new HemisphereLight(0xdfe8f0, 0x0e1012, 0.48));
 
 // Общего света ровно столько, чтобы тень не проваливалась в чёрное.
 scene.add(new AmbientLight(0xffffff, 0.06));
@@ -225,8 +225,8 @@ async function renderCar(root) {
   // Лак нарочно матовее настоящего: острый блик обводит каждую складку
   // децимированной геометрии и превращает её в царапину.
   const gloss = new MeshPhysicalMaterial({
-    color: 0x000000, roughness: 0.42, metalness: 0.0,
-    clearcoat: 0.8, clearcoatRoughness: 0.3,
+    color: 0x000000, roughness: 0.6, metalness: 0.0,
+    clearcoat: 0.35, clearcoatRoughness: 0.45,
   });
   const original = new Map();
   for (const list of Object.values(groups)) {

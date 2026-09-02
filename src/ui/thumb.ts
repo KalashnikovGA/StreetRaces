@@ -23,10 +23,12 @@ export function drawThumb(canvas: HTMLCanvasElement, modelId: string, paint: str
     ctx.imageSmoothingQuality = 'high';
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    const width = rect.width * 0.94;
+    // Габарит машины — ширина на 0.42 высоты. Вписываем по обеим сторонам:
+    // раньше считалось только по ширине, и в низкой клетке машина обрезалась.
+    const width = Math.min(rect.width * 0.94, (rect.height * 0.92) / 0.42);
     const height = width * 0.42;
     ctx.save();
-    ctx.translate((rect.width - width) / 2, rect.height - height * 0.96);
+    ctx.translate((rect.width - width) / 2, rect.height - height * 0.99);
     drawCar(ctx, {
       modelId,
       pimp: { paint: PAINTS[paint] ?? paint },

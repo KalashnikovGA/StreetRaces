@@ -71,11 +71,15 @@ a:hover { color: var(--sodium); }
   min-height: 34px;
 }
 
-.chrome nav { display: flex; flex-wrap: wrap; }
+/* Вкладки делят ширину поровну, счётчики прижаты к правому краю:
+   в шапке не остаётся пустого места. */
+.chrome nav { display: flex; flex: 1 1 auto; flex-wrap: wrap; }
 
 .chrome nav a {
   display: flex;
   align-items: center;
+  flex: 1 1 auto;
+  justify-content: center;
   padding: 0 15px;
   font-family: var(--display);
   font-size: 15px;
@@ -98,9 +102,7 @@ a:hover { color: var(--sodium); }
   box-shadow: inset 0 2px 0 var(--chalk);
 }
 
-.purse { display: flex; min-height: 30px; }
-/* Правый край шапки пустой: счётчики стоят вплотную к вкладкам. */
-.chrome::after { content: ''; flex: 1 1 auto; border-bottom: 1px solid var(--concrete-lt); }
+.purse { display: flex; min-height: 30px; flex: 0 0 auto; }
 
 .purse .cell {
   display: flex;
