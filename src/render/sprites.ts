@@ -59,6 +59,21 @@ function asset(path: string): string {
   return window.__sprites?.[path] ?? path;
 }
 
+/**
+ * Манифест слоёв. В самодостаточной странице он приезжает data-URI, и читать
+ * его через fetch нельзя: CSP хостинга запрещает connect-src к data:, запрос
+ * падает, и машина молча откатывается на векторную отрисовку.
+ */
+async function loadManifest(url: string): Promise<CarSpriteMeta> {
+  if (url.startsWith('data:')) {
+    const payload = url.slice(url.indexOf(',') + 1);
+    return JSON.parse(url.includes(';base64,') ? atob(payload) : decodeURIComponent(payload)) as CarSpriteMeta;
+  }
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('нет манифеста');
+  return (await response.json()) as CarSpriteMeta;
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((done, fail) => {
     const image = new Image();
@@ -83,9 +98,7 @@ export function loadCarSprites(modelId: string): Promise<CarSprites | null> {
 
   const job = (async () => {
     try {
-      const response = await fetch(asset(`/sprites/${modelId}/layers.json`));
-      if (!response.ok) throw new Error('нет манифеста');
-      const meta = (await response.json()) as CarSpriteMeta;
+      const meta = await loadManifest(asset(`/sprites/${modelId}/layers.json`));
       const images = Object.fromEntries(
         await Promise.all(
           LAYERS.map(async (layer) => [layer, await loadImage(asset(`/sprites/${modelId}/${layer}.png`))]),
