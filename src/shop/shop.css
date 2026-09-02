@@ -1,0 +1,21 @@
+/* Автосалон. Та же плотность, что и в гараже: витрина сверху, список ниже. */
+
+.shop-rows .line { grid-template-columns: 26px minmax(0, 1fr) 84px 74px 132px; }
+.shop-rows .klass { font-family: var(--display); font-size: 15px; color: var(--chalk-faint); }
+.shop-rows .line[aria-current='true'] .klass { color: var(--chalk); }
+.shop-rows .owned { color: var(--gate); }
+
+/* Разделитель с условием доступа — строка из оригинала, слово в слово по смыслу */
+.gate-row {
+  padding: 8px 12px;
+  background: var(--pit);
+  border-top: 1px solid var(--concrete-lt);
+  color: var(--chalk-dim);
+  font-size: 13px;
+}
+
+@media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
+@media (max-width: 620px) {
+  .shop-rows .line { grid-template-columns: 20px minmax(0, 1fr) 64px 104px; gap: 8px; }
+  .shop-rows .hide-narrow { display: none; }
+}

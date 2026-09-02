@@ -15,16 +15,16 @@ import {
   ACESFilmicToneMapping, AmbientLight, Box3, BoxGeometry, CircleGeometry, Color,
   CylinderGeometry, DoubleSide, FogExp2, Group, Mesh, MeshStandardMaterial,
   PCFSoftShadowMap, PerspectiveCamera, PointLight, RingGeometry, Scene, SpotLight,
-  SRGBColorSpace, TorusGeometry, Vector3, WebGLRenderer,
+  SRGBColorSpace, Vector3, WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 /** Риг из §11: ключевой, заполняющий, контровой. Позиции — в метрах. */
 export const LIGHT_RIG = [
-  { id: 'key', label: 'Ключевой', color: 0xffd9a0, intensity: 120, position: [3.6, 4.4, 3.2] },
-  { id: 'fill', label: 'Заполняющий', color: 0x7fa6d8, intensity: 34, position: [-4.6, 2.4, 2.0] },
-  { id: 'rim', label: 'Контровой', color: 0xa8d8ff, intensity: 90, position: [-2.4, 3.0, -4.4] },
+  { id: 'key', label: 'Ключевой', color: 0xf2b989, intensity: 120, position: [3.6, 4.4, 3.2] },
+  { id: 'fill', label: 'Заполняющий', color: 0x8fa2ab, intensity: 48, position: [-4.6, 2.4, 2.0] },
+  { id: 'rim', label: 'Контровой', color: 0x9fb6c2, intensity: 90, position: [-2.4, 3.0, -4.4] },
 ] as const;
 
 export type LightId = (typeof LIGHT_RIG)[number]['id'];
@@ -48,15 +48,12 @@ export class Garage {
   private readonly turntable = new Group();
   private readonly lights = new Map<LightId, SpotLight>();
   private readonly bodyMaterials: MeshStandardMaterial[] = [];
-  private rimGlow: MeshStandardMaterial | null = null;
-  private rimLight: PointLight | null = null;
   private readonly canvas: HTMLCanvasElement;
   private readonly options: GarageOptions;
 
   private raf = 0;
   private last = 0;
   private spinning = true;
-  private elapsed = 0;
   /** Плавный переход цвета кузова: цель и текущее значение. */
   private readonly targetColor = new Color('#c0392b');
   private readonly currentColor = new Color('#c0392b');
@@ -76,18 +73,18 @@ export class Garage {
     this.renderer.shadowMap.type = PCFSoftShadowMap;
 
     this.scene = new Scene();
-    this.scene.background = new Color(0x0a0d13);
+    this.scene.background = new Color(0x101214);
     // Туман съедает стены и оставляет машину единственным, что видно целиком.
-    this.scene.fog = new FogExp2(0x0a0d13, 0.055);
+    this.scene.fog = new FogExp2(0x101214, 0.055);
 
     this.camera = new PerspectiveCamera(38, 1, 0.1, 100);
-    this.camera.position.set(6.4, 2.5, 6.8);
+    this.camera.position.set(5.4, 2.1, 5.6);
 
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.06;
     this.controls.enablePan = false;
-    this.controls.minDistance = 4.5;
+    this.controls.minDistance = 3.8;
     this.controls.maxDistance = 13;
     // Под пол не пускаем: снизу у низкополигональной машины нечего показывать.
     this.controls.minPolarAngle = 0.35;
@@ -106,10 +103,10 @@ export class Garage {
   // ── сцена ──────────────────────────────────────────────────────────────────
 
   private buildRoom(): void {
-    // Пол: тёмный и слегка глянцевый, чтобы ловить пятно от подиума.
+    // Пол — бетон: матовый, чтобы свет ложился пятном, а не бликом.
     const floor = new Mesh(
       new CircleGeometry(26, 64),
-      new MeshStandardMaterial({ color: 0x14171f, roughness: 0.62, metalness: 0.15 }),
+      new MeshStandardMaterial({ color: 0x1b1e20, roughness: 0.88, metalness: 0.04 }),
     );
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
@@ -119,13 +116,14 @@ export class Garage {
     // а туман нечему растворять.
     const walls = new Mesh(
       new BoxGeometry(30, 9, 30),
-      new MeshStandardMaterial({ color: 0x0f131b, roughness: 1, side: DoubleSide }),
+      new MeshStandardMaterial({ color: 0x16181a, roughness: 1, side: DoubleSide }),
     );
     walls.position.y = 4.4;
     this.scene.add(walls);
 
-    // Рёбра секционных ворот — деталь, по которой помещение читается как гараж.
-    const railMaterial = new MeshStandardMaterial({ color: 0x1b2130, roughness: 0.85 });
+    // Рёбра секционных ворот, крашенные тем же зелёным, что и ворота в палитре.
+    // Деталь, по которой помещение читается как гаражный кооператив, а не студия.
+    const railMaterial = new MeshStandardMaterial({ color: 0x3e6b5f, roughness: 0.92 });
     for (let i = 0; i < 7; i++) {
       const rail = new Mesh(new BoxGeometry(11, 0.1, 0.16), railMaterial);
       rail.position.set(0, 0.75 + i * 0.78, -7.2);
@@ -141,43 +139,28 @@ export class Garage {
   private buildPodium(): void {
     const drum = new Mesh(
       new CylinderGeometry(PODIUM_RADIUS, PODIUM_RADIUS * 1.04, 0.34, 72),
-      new MeshStandardMaterial({ color: 0x171b24, roughness: 0.45, metalness: 0.5 }),
+      new MeshStandardMaterial({ color: 0x22262a, roughness: 0.9, metalness: 0.08 }),
     );
     drum.position.y = 0.17;
     drum.receiveShadow = true;
     drum.castShadow = true;
     this.scene.add(drum);
 
-    // Светящееся кольцо: эмиссивный материал плюс точечный источник,
-    // иначе свечение не ложится на пол и кольцо выглядит наклейкой.
-    this.rimGlow = new MeshStandardMaterial({
-      color: 0x120c04,
-      emissive: new Color(0xffb347),
-      emissiveIntensity: 2.4,
-      roughness: 0.4,
-    });
-    const ring = new Mesh(new TorusGeometry(PODIUM_RADIUS + 0.02, 0.035, 12, 96), this.rimGlow);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.35;
-    this.scene.add(ring);
-
-    const spill = new Mesh(
-      new RingGeometry(PODIUM_RADIUS + 0.05, PODIUM_RADIUS + 1.5, 64),
-      new MeshStandardMaterial({
-        color: 0x000000,
-        emissive: new Color(0xffb347),
-        emissiveIntensity: 0.16,
-        transparent: true,
-        opacity: 0.5,
-      }),
+    // Кромка подиума — полоса бетона посветлее, а не светящееся кольцо.
+    // Свечений в этом мире нет: свет идёт только от ламп рига и фонаря.
+    const edge = new Mesh(
+      new RingGeometry(PODIUM_RADIUS - 0.06, PODIUM_RADIUS + 0.02, 96),
+      new MeshStandardMaterial({ color: 0x3d4247, roughness: 0.85 }),
     );
-    spill.rotation.x = -Math.PI / 2;
-    spill.position.y = 0.012;
-    this.scene.add(spill);
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.y = 0.341;
+    this.scene.add(edge);
 
-    this.rimLight = new PointLight(0xffb347, 14, 9, 2);
-    this.rimLight.position.set(0, 0.42, 0);
-    this.scene.add(this.rimLight);
+    // Натриевый фонарь над машиной. Один тёплый источник на всю сцену —
+    // то же правило «один акцент на экран», только в трёх измерениях.
+    const lamp = new PointLight(0xe07b39, 16, 12, 2);
+    lamp.position.set(0, 4.2, 0.4);
+    this.scene.add(lamp);
 
     this.turntable.position.y = 0.34;
   }
@@ -197,7 +180,7 @@ export class Garage {
       this.lights.set(item.id, light);
     }
     // Ровно столько общего света, чтобы тени не проваливались в чёрное.
-    this.scene.add(new AmbientLight(0x2a3446, 0.55));
+    this.scene.add(new AmbientLight(0x2a2e31, 0.6));
   }
 
   private loadCar(): void {
@@ -288,8 +271,6 @@ export class Garage {
   }
 
   private update(dt: number): void {
-    this.elapsed += dt;
-
     if (this.spinning && !this.reducedMotion) {
       this.turntable.rotation.y += ROTATION_SPEED * dt;
     }
@@ -298,21 +279,8 @@ export class Garage {
     this.currentColor.lerp(this.targetColor, 1 - Math.exp(-dt * 7));
     for (const material of this.bodyMaterials) material.color.copy(this.currentColor);
 
-    // Заполняющая лампа чуть подрагивает, как люминесцентная в гараже.
-    // Амплитуда маленькая: заметно боковым зрением, не отвлекает.
-    const fill = this.lights.get('fill');
-    if (fill && fill.intensity > 0) {
-      const flicker = 1 + 0.06 * Math.sin(this.elapsed * 37) * Math.sin(this.elapsed * 5.3);
-      fill.intensity = LIGHT_RIG[1].intensity * flicker;
-    }
-
-    // Кольцо подиума дышит в такт вращению.
-    if (this.rimGlow && this.rimLight) {
-      const pulse = 1 + 0.12 * Math.sin(this.elapsed * 1.3);
-      this.rimGlow.emissiveIntensity = 2.4 * pulse;
-      this.rimLight.intensity = 14 * pulse;
-    }
-
+    // Одно движение на экран: подиум вращается, и это всё. Ни мерцающих ламп,
+    // ни «дышащих» колец — они здесь были и оказались вторым движением.
     this.controls.update();
   }
 }

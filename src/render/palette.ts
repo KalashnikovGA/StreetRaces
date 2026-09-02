@@ -1,29 +1,37 @@
-/** Палитра. Ночной двор: тёплый свет фонарей на холодном асфальте. */
+/**
+ * Палитра. Тот же гаражный кооператив, что и в интерфейсе: холодный бетон
+ * под тёплым натриевым фонарём. Значения совпадают с токенами из theme.css —
+ * если правишь там, поправь и здесь.
+ */
 
 export const PALETTE = {
-  skyTop: '#0b0f1a',
-  skyBottom: '#1b2233',
-  cityFar: '#141b2b',
-  cityNear: '#0e131f',
-  window: '#f2c14e',
-  ground: '#191d26',
-  road: '#23262e',
-  roadEdge: '#2f333d',
-  lane: '#3a3f4a',
-  marking: '#c9cdd6',
-  shadow: 'rgba(0,0,0,0.45)',
-  glass: '#2b3446',
-  glassShine: 'rgba(255,255,255,0.18)',
-  rubber: '#141519',
-  rim: '#9aa3b2',
-  headlight: '#ffe9b8',
-  taillight: '#ff4d4d',
-  smoke: 'rgba(210,214,222,0.55)',
-  nitro: '#6fd3ff',
-  steam: 'rgba(190,205,220,0.5)',
-  text: '#e8ebf0',
-  textDim: '#8b93a3',
-  accent: '#ffb347',
+  skyTop: '#0e1012',
+  skyBottom: '#1c1f21',
+  cityFar: '#1b1e20',
+  cityNear: '#131517',
+  window: '#c9762f',
+  ground: '#1b1e20',
+  road: '#26292b',
+  roadEdge: '#3d4247',
+  lane: '#33383c',
+  marking: '#d8d5ce',
+  shadow: 'rgba(0,0,0,0.5)',
+  glass: '#2a2e31',
+  glassShine: 'rgba(216,213,206,0.14)',
+  rubber: '#101214',
+  rim: '#8e8b85',
+  headlight: '#f0dcc0',
+  taillight: '#c04a35',
+  smoke: 'rgba(200,198,192,0.5)',
+  nitro: '#79a8c2',
+  steam: 'rgba(180,180,175,0.45)',
+  text: '#d8d5ce',
+  textDim: '#8e8b85',
+  accent: '#e07b39',
+  gate: '#3e6b5f',
+  /** Зажжённая зелёная лампа светофора: тот же цвет ворот, но горящий. */
+  gateLight: '#5f9e8b',
+  rust: '#8c3b2e',
 } as const;
 
 /** Заводские окраски. Цвет — строка кода, а не отдельный файл рендера (§11). */

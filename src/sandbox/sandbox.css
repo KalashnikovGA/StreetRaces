@@ -1,0 +1,29 @@
+/* Песочница баланса. Инструмент, но живёт в той же системе, что и игра. */
+
+.body.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.two-strips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.two-strips .strip { margin-bottom: 8px; }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+pre.out {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--pit);
+  border-top: 1px solid var(--concrete-lt);
+  font: 12px/1.5 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: var(--chalk-dim);
+  white-space: pre-wrap;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.sheet .head td { font-family: var(--display); font-size: 16px; color: var(--chalk); }
+/* Строки с осями и маркерами длинные — им можно переноситься,
+   в отличие от колонки чисел. */
+.sheet .flags td { color: var(--chalk-faint); font-size: 12px; }
+.sheet .flags td:last-child { white-space: normal; }
+
+@media (max-width: 860px) {
+  .body.two, .two-strips { grid-template-columns: 1fr; }
+}

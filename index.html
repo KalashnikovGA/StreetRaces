@@ -4,50 +4,55 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>На слабо — заезд</title>
-  <link rel="stylesheet" href="/src/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Onest:wght@400;500;600&display=swap" />
 </head>
 <body>
-  <div class="wrap">
-    <header class="top">
-      <h1>НА СЛАБО</h1>
-      <span class="sub">заезд</span>
-      <nav>
-        <a href="/sandbox.html">песочница баланса</a>
-      </nav>
-    </header>
+  <div class="chrome" id="chrome"></div>
 
-    <canvas class="track" id="track"></canvas>
-
-    <div class="panel">
-      <div class="row" style="align-items: center">
-        <div style="flex: 0 0 auto; display: flex; gap: 8px; align-items: center">
-          <button class="primary" id="run">СТАРТ</button>
-          <button id="again">Другой заезд</button>
-          <button id="sound">Звук: вкл</button>
-        </div>
-        <div id="verdict" class="muted" style="flex: 1 1 auto; text-align: right"></div>
+  <div class="shell">
+    <section class="strip">
+      <canvas class="track" id="track"></canvas>
+      <div class="bar">
+        <button class="btn primary" id="run" type="button">Старт</button>
+        <button class="btn" id="again" type="button">Другой заезд</button>
+        <button class="btn quiet" id="sound" type="button">Звук включён</button>
+        <output class="verdict" id="verdict"></output>
       </div>
-      <div class="share">
-        <input type="text" id="link" readonly />
-        <button id="copy">Скопировать ссылку</button>
-      </div>
-      <p class="muted" style="margin: 8px 0 0">
-        Весь заезд лежит в этой ссылке. Она открывается у кого угодно, без регистрации:
-        повтор считается той же функцией из того же сида.
-      </p>
-    </div>
+    </section>
 
-    <div class="row">
-      <div class="panel">
+    <section class="strip">
+      <header>
         <h2>Расклад до старта</h2>
-        <div id="odds"></div>
+        <span class="note" id="conditions"></span>
+      </header>
+      <div class="body tight">
+        <table class="sheet compare" id="odds"></table>
       </div>
-      <div class="panel">
+    </section>
+
+    <section class="strip">
+      <header>
+        <h2>Повтор</h2>
+        <span class="note">Весь заезд лежит в ссылке. Откроется у кого угодно, без регистрации</span>
+      </header>
+      <div class="body share">
+        <input type="text" id="link" readonly />
+        <button class="btn" id="copy" type="button">Скопировать</button>
+      </div>
+    </section>
+
+    <section class="strip">
+      <header>
         <h2>Что произошло в заезде</h2>
-        <pre class="out" id="events"></pre>
-      </div>
-    </div>
+        <span class="note">Отладочная панель: в игре причину показывает картинка, а не текст</span>
+      </header>
+      <pre class="out" id="events"></pre>
+    </section>
   </div>
+
+  <footer id="footer"></footer>
   <script type="module" src="/src/game/main.ts"></script>
 </body>
 </html>

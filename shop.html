@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>На слабо — автосалон</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Onest:wght@400;500;600&display=swap" />
+</head>
+<body>
+  <div class="chrome" id="chrome"></div>
+
+  <div class="shell">
+    <!-- Витрина выбранной модели: слева машина, справа цифры и покупка -->
+    <section class="strip hero">
+      <div class="hero-grid">
+        <div class="stage">
+          <canvas id="scene"></canvas>
+          <p class="stage-note" id="loading">Загружаю модель</p>
+        </div>
+
+        <div class="plate-card">
+          <h1 id="pick-nick">Корытце</h1>
+          <p class="model" id="pick-model">«Заря-965»</p>
+          <table class="sheet card-sheet" id="pick-sheet"></table>
+          <p class="ceiling" id="pick-note"></p>
+          <div class="actions">
+            <button class="btn primary" id="buy" type="button">Купить</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Список моделей: строки, плотно, с ценой и классом -->
+    <section class="strip">
+      <header>
+        <h2>Что стоит на площадке</h2>
+        <span class="note" id="shop-note"></span>
+      </header>
+      <div class="body tight">
+        <ul class="rows shop-rows" id="models"></ul>
+      </div>
+    </section>
+  </div>
+
+  <footer id="footer"></footer>
+  <script type="module" src="/src/shop/main.ts"></script>
+</body>
+</html>

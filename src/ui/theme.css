@@ -1,0 +1,295 @@
+/**
+ * Дизайн-система игры. Один источник правды для всех экранов.
+ *
+ * Мир — не ночной Токио, а гаражный кооператив: холодный бетон под тёплым
+ * натриевым фонарём. Отсюда все решения ниже: нулевые скругления, отсутствие
+ * свечений, табличные цифры и плотность вместо воздуха.
+ */
+
+:root {
+  --asphalt: #16181a;
+  --concrete: #2a2e31;
+  --concrete-lt: #3d4247;
+  --sodium: #e07b39;
+  --gate: #3e6b5f;
+  --chalk: #d8d5ce;
+  --rust: #8c3b2e;
+
+  /* Производные: тот же мел и тот же бетон, разведённые по прозрачности.
+     Новых цветов в палитре нет — есть степени этих семи. */
+  --chalk-dim: #8e8b85;
+  --chalk-faint: #63615d;
+  --pit: #101214;
+
+  --display: 'Oswald', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --body: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--asphalt);
+  color: var(--chalk);
+  font-family: var(--body);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Цифры сравнивают — значит, они стоят в колонку. */
+b, strong, td, th, input, output, .num { font-variant-numeric: tabular-nums; }
+
+h1, h2, h3 {
+  font-family: var(--display);
+  font-weight: 500;
+  margin: 0;
+  line-height: 1.1;
+  letter-spacing: 0.2px;
+}
+
+a { color: var(--chalk); text-decoration: none; }
+a:hover { color: var(--sodium); }
+
+:focus-visible { outline: 2px solid var(--sodium); outline-offset: 1px; }
+
+/* ── верхняя панель: вкладки слева, счётчики справа ───────────────────────── */
+
+.chrome {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  background: var(--concrete);
+  border-bottom: 1px solid var(--concrete-lt);
+  min-height: 34px;
+}
+
+.chrome nav { display: flex; flex-wrap: wrap; }
+
+.chrome nav a {
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  font-family: var(--display);
+  font-size: 15px;
+  color: var(--chalk-dim);
+  border-right: 1px solid var(--concrete-lt);
+  white-space: nowrap;
+}
+
+.chrome nav a:first-child { border-left: 1px solid var(--concrete-lt); }
+.chrome nav a:hover { background: var(--concrete-lt); color: var(--chalk); }
+
+/* Активная вкладка отмечена меловой чертой, а не акцентом: натриевый цвет
+   на экране один и ведёт к главному действию, а не к навигации. */
+.chrome nav a[aria-current='page'] {
+  background: var(--asphalt);
+  color: var(--chalk);
+  box-shadow: inset 0 2px 0 var(--chalk);
+}
+
+.purse { display: flex; margin-left: auto; min-height: 30px; }
+
+.purse .cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  border-left: 1px solid var(--concrete-lt);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* Валюты различаются формой метки, а не цветом: круг — монеты, ромб —
+   золотые, квадрат — класс. Ровно две валюты (§5). */
+.purse .mark { width: 10px; height: 10px; flex: 0 0 auto; }
+.purse .mark.coin { border-radius: 50%; background: var(--chalk-faint); }
+.purse .mark.gold { background: var(--chalk); transform: rotate(45deg) scale(0.82); }
+.purse .mark.klass { background: var(--gate); }
+.purse .cell b { font-weight: 500; }
+
+/* ── каркас страницы ─────────────────────────────────────────────────────── */
+
+.shell {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 12px 14px 28px;
+  flex: 1 0 auto;
+}
+
+.strip {
+  background: var(--concrete);
+  border: 1px solid var(--concrete-lt);
+  margin-bottom: 8px;
+}
+
+.strip + .strip { margin-top: 0; }
+
+.strip > header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--concrete-lt);
+  background: var(--pit);
+}
+
+.strip > header h2 { font-size: 16px; }
+.strip > header .note { margin-left: auto; color: var(--chalk-faint); font-size: 12px; }
+
+.body { padding: 10px 12px; }
+.body.tight { padding: 0; }
+
+/* ── кнопки ──────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  min-height: 32px;
+  background: var(--concrete-lt);
+  color: var(--chalk);
+  border: 1px solid var(--concrete-lt);
+  border-radius: 2px;
+  font-family: var(--display);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.btn:hover { background: #4a5055; }
+
+.btn.primary {
+  background: var(--sodium);
+  border-color: var(--sodium);
+  color: #1a0e05;
+  font-weight: 500;
+}
+
+.btn.primary:hover { background: #ef8b46; }
+
+.btn.quiet { background: transparent; color: var(--chalk-dim); }
+.btn.quiet:hover { background: var(--concrete-lt); color: var(--chalk); }
+
+.btn[disabled] { opacity: 0.42; cursor: default; }
+.btn[disabled]:hover { background: var(--concrete-lt); }
+.btn.primary[disabled]:hover { background: var(--sodium); }
+
+.btn.small { padding: 5px 10px; min-height: 26px; font-size: 13px; }
+
+.linkish {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--chalk-dim);
+  font: inherit;
+  cursor: pointer;
+}
+.linkish:hover { color: var(--sodium); }
+
+/* ── поля ────────────────────────────────────────────────────────────────── */
+
+input[type='text'], select {
+  background: var(--pit);
+  color: var(--chalk);
+  border: 1px solid var(--concrete-lt);
+  border-radius: 0;
+  padding: 6px 8px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ползунки нейтральные: акцент на экране один, и он не здесь. */
+input[type='range'] { accent-color: var(--chalk-faint); }
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+.field > label { flex: 0 0 120px; color: var(--chalk-dim); }
+.field > select, .field > input[type='text'] { flex: 1 1 auto; min-width: 0; }
+.field .val { flex: 0 0 26px; text-align: right; }
+
+/* ── плотные списки строками (гараж, автосалон, лента) ───────────────────── */
+
+.rows { list-style: none; margin: 0; padding: 0; }
+
+.rows li + li { border-top: 1px solid var(--concrete-lt); }
+
+.rows .line {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  border-left: 2px solid transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rows .line:hover { background: var(--concrete-lt); }
+
+/* Шапка списка: подписи к колонкам цифр. Рейтинг в этой игре сравнивают,
+   значит колонку надо назвать. */
+.rows .line.head {
+  padding: 5px 12px;
+  background: var(--pit);
+  color: var(--chalk-faint);
+  font-size: 12px;
+  cursor: default;
+}
+.rows .line.head:hover { background: var(--pit); }
+.rows .line[aria-current='true'] { background: var(--concrete-lt); border-left-color: var(--chalk); }
+.rows .line[disabled] { cursor: default; opacity: 0.4; }
+.rows .line[disabled]:hover { background: transparent; }
+
+.rows .title { font-family: var(--display); font-size: 17px; }
+.rows .sub { color: var(--chalk-faint); font-size: 12px; }
+.rows .num { text-align: right; white-space: nowrap; }
+
+/* ── таблица характеристик и статистики ──────────────────────────────────── */
+
+.sheet { width: 100%; border-collapse: collapse; }
+.sheet td { padding: 5px 12px; border-top: 1px solid var(--concrete-lt); }
+.sheet tr:first-child td { border-top: 0; }
+.sheet td:first-child { color: var(--chalk-dim); }
+.sheet td:last-child { text-align: right; white-space: nowrap; }
+.sheet .big { font-family: var(--display); font-size: 19px; }
+
+.dim { color: var(--chalk-dim); }
+.faint { color: var(--chalk-faint); }
+.won { color: var(--gate); }
+.lost { color: var(--rust); }
+.hot { color: var(--sodium); }
+
+/* ── подвал ──────────────────────────────────────────────────────────────── */
+
+.underline-bar {
+  border-top: 1px solid var(--concrete-lt);
+  background: var(--concrete);
+  padding: 8px 14px;
+  color: var(--chalk-faint);
+  font-size: 12px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.underline-bar b { font-family: var(--display); font-weight: 500; color: var(--chalk-dim); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

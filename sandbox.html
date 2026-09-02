@@ -4,19 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>На слабо — песочница баланса</title>
-  <link rel="stylesheet" href="/src/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Onest:wght@400;500;600&display=swap" />
 </head>
 <body>
-  <div class="wrap">
-    <header class="top">
-      <h1>НА СЛАБО</h1>
-      <span class="sub">песочница баланса · шаг 1</span>
-      <nav><a href="/">к заезду</a></nav>
-    </header>
+  <div class="chrome" id="chrome"></div>
 
-    <div class="panel">
-      <h2>Условия заезда</h2>
-      <div class="row">
+  <div class="shell">
+    <section class="strip">
+      <header>
+        <h2>Условия заезда</h2>
+        <span class="note">Шаг 1: баланс проверяется руками, ползунками и пачкой заездов</span>
+      </header>
+      <div class="body two">
         <div>
           <div class="field"><label>Дистанция</label><select id="distance">
             <option value="short">402 метра</option>
@@ -32,31 +33,37 @@
         </div>
         <div>
           <div class="field"><label>Сид</label><input type="text" id="seed" value="k7m2xq9b" /></div>
-          <div class="field"><label></label><button id="reseed">Другой сид</button></div>
-          <p class="muted">Один сид — один и тот же заезд, всегда. На этом держатся
-            повторы по ссылке и серверная проверка ставки.</p>
+          <div class="field"><label></label><button class="btn" id="reseed" type="button">Другой сид</button></div>
+          <p class="faint">Один сид — один и тот же заезд, всегда. На этом держатся повторы
+            по ссылке и серверная проверка ставки.</p>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="row" id="sides"></div>
+    <div class="two-strips" id="sides"></div>
 
-    <div class="panel">
-      <h2>Расклад</h2>
-      <div id="odds"></div>
-    </div>
+    <section class="strip">
+      <header><h2>Расклад</h2></header>
+      <div class="body tight"><table class="sheet" id="odds"></table></div>
+    </section>
 
-    <div class="panel">
-      <h2>Прогон</h2>
-      <div class="chips" style="margin-bottom:10px">
-        <button data-n="1000">1 000 заездов</button>
-        <button data-n="20000">20 000</button>
-        <button data-n="200000">200 000</button>
+    <section class="strip">
+      <header>
+        <h2>Прогон</h2>
+        <span class="note">Эмпирика должна сойтись с формулой</span>
+      </header>
+      <div class="body">
+        <div class="chips">
+          <button class="btn small" data-n="1000" type="button">1 000 заездов</button>
+          <button class="btn small" data-n="20000" type="button">20 000</button>
+          <button class="btn small" data-n="200000" type="button">200 000</button>
+        </div>
       </div>
-      <pre class="out" id="out">Настройте машины и прогоните пачку заездов.
-Эмпирика должна сойтись с формулой — если нет, ошибка в ядре.</pre>
-    </div>
+      <pre class="out" id="out">Настрой машины и прогони пачку заездов.</pre>
+    </section>
   </div>
+
+  <footer id="footer"></footer>
   <script type="module" src="/src/sandbox/main.ts"></script>
 </body>
 </html>

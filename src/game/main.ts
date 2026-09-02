@@ -2,10 +2,12 @@
  * Страница заезда и повтора по ссылке. Шаги 2 и 3 из §14.
  *
  * Если в адресе есть повтор — проигрывается он, кадр в кадр, без регистрации.
- * Если нет — собирается показательный заезд, чтобы страница не была пустой.
+ * Если нет — собирается заезд на выбранной в гараже машине, чтобы переход
+ * «гараж → гонки» вёл туда же, куда вёл в оригинале.
  */
 
-import '../styles.css';
+import '../ui/theme.css';
+import './race.css';
 import type { RaceResult } from '../core/race.ts';
 import {
   CAR_MODELS, bestConfigFor, botCharacter, botConfig, getModel, horsepower, makeRng,
@@ -15,6 +17,8 @@ import { decodeRace, replayUrl } from '../replay/codec.ts';
 import { RaceScene, type SideVisual } from '../render/scene.ts';
 import { RaceAudio } from '../audio/engine.ts';
 import { PAINTS } from '../render/palette.ts';
+import { mountChrome, mountFooter } from '../ui/chrome.ts';
+import { currentIndex, owned } from '../ui/state.ts';
 
 const canvas = document.getElementById('track') as HTMLCanvasElement;
 const runButton = document.getElementById('run') as HTMLButtonElement;
@@ -23,6 +27,7 @@ const soundButton = document.getElementById('sound') as HTMLButtonElement;
 const copyButton = document.getElementById('copy') as HTMLButtonElement;
 const linkInput = document.getElementById('link') as HTMLInputElement;
 const oddsBox = document.getElementById('odds') as HTMLElement;
+const conditionsBox = document.getElementById('conditions') as HTMLElement;
 const eventsBox = document.getElementById('events') as HTMLElement;
 const verdictBox = document.getElementById('verdict') as HTMLElement;
 
@@ -34,17 +39,19 @@ const PAINT_KEYS = Object.keys(PAINTS);
 
 function visualFor(input: RaceInput, side: Side): SideVisual {
   const rng = makeRng(`${input.seed}/paint/${side}`);
+  // Своя машина едет в своей окраске: она выбрана в Pimp и должна быть узнана.
+  const mine = side === 'a' ? owned[currentIndex()] : undefined;
   return {
     name: input[side].name,
     pimp: {
-      paint: PAINT_KEYS[Math.floor(rng() * PAINT_KEYS.length)]!,
+      paint: mine?.paint ?? PAINT_KEYS[Math.floor(rng() * PAINT_KEYS.length)]!,
       neon: rng() < 0.35 ? '#6fd3ff' : null,
       drop: rng(),
     },
   };
 }
 
-/** Показательный заезд: «Корытце» против случайного соперника. */
+/** Заезд на машине из гаража против случайного соседа. */
 function demoRace(): RaceInput {
   const seed = randomSeed(Math.random);
   const rng = makeRng(`${seed}/demo`);
@@ -53,14 +60,12 @@ function demoRace(): RaceInput {
     surface: rng() < 0.35 ? 'wet' : 'dry',
     profile: rng() < 0.3 ? 'uphill' : 'flat',
   };
+  const mine = owned[currentIndex()]!;
   const rival = CAR_MODELS[Math.floor(rng() * 4)]!;
   const level = () => Math.floor(rng() * 11);
   const a: Racer = {
     name: 'Ты',
-    car: {
-      modelId: 'zarya965',
-      specs: { tires: 6, ignition: 5, clutch: 5, suspension: 4, boost: 7, intake: 5, radiator: 4 },
-    },
+    car: { modelId: mine.car.modelId, specs: { ...mine.car.specs } },
     config: bestConfigFor(conditions),
   };
   const b: Racer = {
@@ -101,35 +106,60 @@ const CONFIG_WORDS: Record<string, string> = {
   none: 'не жать', early: 'на старте', mid: 'в середине', late: 'под конец',
 };
 
+const WEIGHT_WORDS = ['нет', 'частично', 'полностью'];
+
+/**
+ * Расклад — таблица в две колонки. Числа сравнивают, значит они стоят
+ * друг под другом, а не в двух отдельных абзацах.
+ */
 function renderOdds(input: RaceInput, result: RaceResult): void {
-  const rows: string[] = [];
-  rows.push(`<div class="stat"><span>Условия</span><b>${
-    [input.conditions.distance, input.conditions.surface, input.conditions.profile]
-      .map((k) => CONDITION_WORDS[k]).join(' · ')
-  }</b></div>`);
-  for (const side of ['a', 'b'] as const) {
-    const racer = input[side];
-    const model = getModel(racer.car.modelId);
-    const odds = result[side];
-    rows.push(`
-      <div class="stat" style="margin-top:10px"><span>${racer.name}</span>
-        <b>${model.nick} · ${horsepower(racer.car)} л.с. · класс ${model.klass}</b></div>
-      <div class="stat"><span>Сила</span><b>${strength(racer.car).toFixed(0)}</b></div>
-      <div class="stat"><span>Настройка</span><b>${(odds.tuning.quality * 100).toFixed(0)}%</b></div>
-      <div class="bar"><i style="width:${(odds.tuning.quality * 100).toFixed(0)}%"></i></div>
-      <div class="muted">резина ${CONFIG_WORDS[racer.config.tires]} ·
-        передаточные ${CONFIG_WORDS[racer.config.gearing]} ·
-        давление ${CONFIG_WORDS[racer.config.pressure]} ·
-        нитро ${CONFIG_WORDS[racer.config.nitro]} ·
-        снятие веса ${racer.config.weightCut}</div>`);
-  }
-  const p = result.pWinA;
-  rows.push(`<div class="stat" style="margin-top:12px"><span>Шансы до старта</span>
-    <b>${(p * 100).toFixed(1)}% : ${((1 - p) * 100).toFixed(1)}%</b></div>`);
-  if (result.strengthRatio >= 1.5) {
-    rows.push(`<div class="muted">Соперники разошлись в силе в ${result.strengthRatio.toFixed(2)} раза.</div>`);
-  }
-  oddsBox.innerHTML = rows.join('');
+  const { conditions } = input;
+  conditionsBox.textContent = [
+    CONDITION_WORDS[conditions.distance],
+    CONDITION_WORDS[conditions.surface],
+    CONDITION_WORDS[conditions.profile],
+  ].join(', ');
+
+  const rows: { label: string; key?: boolean; value: (side: Side) => string }[] = [
+    { label: 'Машина', value: (s) => getModel(input[s].car.modelId).nick },
+    { label: 'Класс', value: (s) => getModel(input[s].car.modelId).klass },
+    { label: 'Мощность', value: (s) => `${horsepower(input[s].car)} л.с.` },
+    { label: 'Рейтинг', value: (s) => strength(input[s].car).toFixed(0) },
+    { label: 'Настройка', value: (s) => `${(result[s].tuning.quality * 100).toFixed(0)}%` },
+    { label: 'Резина', value: (s) => CONFIG_WORDS[input[s].config.tires]! },
+    { label: 'Передаточные', value: (s) => CONFIG_WORDS[input[s].config.gearing]! },
+    { label: 'Давление', value: (s) => CONFIG_WORDS[input[s].config.pressure]! },
+    { label: 'Нитро', value: (s) => CONFIG_WORDS[input[s].config.nitro]! },
+    { label: 'Снятие веса', value: (s) => WEIGHT_WORDS[input[s].config.weightCut]! },
+    {
+      label: 'Шанс до старта',
+      key: true,
+      value: (s) => `${((s === 'a' ? result.pWinA : 1 - result.pWinA) * 100).toFixed(1)}%`,
+    },
+  ];
+
+  const head = document.createElement('tr');
+  head.append(th(''), th(input.a.name), th(input.b.name));
+  const body = rows.map((row) => {
+    const tr = document.createElement('tr');
+    if (row.key) tr.className = 'key';
+    tr.append(td(row.label), td(row.value('a')), td(row.value('b')));
+    return tr;
+  });
+
+  oddsBox.replaceChildren(head, ...body);
+}
+
+function th(text: string): HTMLTableCellElement {
+  const node = document.createElement('th');
+  node.textContent = text;
+  return node;
+}
+
+function td(text: string): HTMLTableCellElement {
+  const node = document.createElement('td');
+  node.textContent = text;
+  return node;
 }
 
 const EVENT_WORDS: Record<string, string> = {
@@ -156,7 +186,7 @@ function renderEvents(input: RaceInput, result: RaceResult): void {
       return `${event.t.toFixed(2).padStart(5)}с  ${who.padEnd(16)} ${EVENT_WORDS[event.kind]}${gear}`;
     });
   lines.push('');
-  lines.push(`победитель: ${input[result.winner].name}`);
+  lines.push(`забрал: ${input[result.winner].name}`);
   lines.push(`шанс победителя до старта: ${((result.winner === 'a' ? result.pWinA : 1 - result.pWinA) * 100).toFixed(1)}%`);
   lines.push(`бросок: ${result.roll.toFixed(6)}   сид: ${result.seed}`);
   if (result.miracle) lines.push('ЧУДО: слабейший вынес машину втрое сильнее');
@@ -172,11 +202,11 @@ function updateLink(input: RaceInput): void {
 
 function verdict(input: RaceInput, result: RaceResult): void {
   const winner = input[result.winner].name;
-  const cls = result.winner === 'a' ? 'win' : 'lose';
+  verdictBox.className = `verdict ${result.winner === 'a' ? 'won' : 'lost'}`;
   const tail = result.miracle
-    ? ' — чудо'
-    : result.photoFinish ? ' — фотофиниш' : result.upset ? ' — апсет' : '';
-  verdictBox.innerHTML = `<span class="${cls}">${winner} забрал${tail}</span>`;
+    ? ', и это чудо'
+    : result.photoFinish ? ', фотофиниш' : result.upset ? ', не фаворит' : '';
+  verdictBox.textContent = `${winner} забрал${tail}`;
 }
 
 function load(input: RaceInput): void {
@@ -184,6 +214,7 @@ function load(input: RaceInput): void {
   scene?.stop();
   audio.stop();
   verdictBox.textContent = '';
+  verdictBox.className = 'verdict';
   const result = race(input);
   // Опорная скорость для питча двигателя — реальный максимум этого заезда.
   const topSpeed = Math.max(
@@ -231,13 +262,13 @@ againButton.addEventListener('click', () => {
 
 soundButton.addEventListener('click', () => {
   audio.setMuted(!audio.isMuted());
-  soundButton.textContent = audio.isMuted() ? 'Звук: выкл' : 'Звук: вкл';
+  soundButton.textContent = audio.isMuted() ? 'Звук выключен' : 'Звук включён';
 });
 
 copyButton.addEventListener('click', async () => {
   await navigator.clipboard.writeText(linkInput.value);
   copyButton.textContent = 'Скопировано';
-  setTimeout(() => { copyButton.textContent = 'Скопировать ссылку'; }, 1500);
+  setTimeout(() => { copyButton.textContent = 'Скопировать'; }, 1500);
 });
 
 window.addEventListener('resize', () => {
@@ -250,4 +281,6 @@ window.addEventListener('hashchange', () => {
   if (fromUrl) load(fromUrl);
 });
 
+mountChrome('race');
+mountFooter();
 load(current);

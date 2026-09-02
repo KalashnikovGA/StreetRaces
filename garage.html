@@ -6,72 +6,71 @@
   <title>На слабо — гараж</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" />
-  <link rel="stylesheet" href="/src/garage/garage.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Onest:wght@400;500;600&display=swap" />
 </head>
 <body>
+  <div class="chrome" id="chrome"></div>
+
   <div class="shell">
-    <header class="masthead">
-      <h1 class="mark">На <span>слабо</span></h1>
-      <p class="tagline">Гараж</p>
-      <div class="purse">
-        <span class="coin" title="Монеты">148 200</span>
-        <span class="gold" title="Золотые монеты">36</span>
-      </div>
-      <nav class="tabs">
-        <a href="/">Заезд</a>
-        <a href="/sandbox.html">Песочница</a>
-      </nav>
-    </header>
+    <!-- Машина: слева витрина, справа цифры и действия. Порядок из оригинала. -->
+    <section class="strip hero">
+      <div class="hero-grid">
+        <div class="stage">
+          <canvas id="scene"></canvas>
+          <p class="stage-note" id="loading">Загружаю модель</p>
+          <button class="btn quiet small stage-spin" id="toggle-spin" aria-pressed="true">Вращение</button>
+        </div>
 
-    <div class="layout">
-      <!-- Гараж списком — §9, буквально как в оригинале -->
-      <aside class="cars">
-        <h2 class="eyebrow">Мои машины</h2>
-        <ul id="car-list"></ul>
-      </aside>
-
-      <main class="stage">
-        <canvas id="scene"></canvas>
-        <div class="stage-loading" id="loading">Загружаю модель…</div>
-
-        <div class="stage-plate">
-          <p class="nick" id="car-nick">Корытце</p>
+        <div class="plate-card">
+          <h1 id="car-nick">Корытце</h1>
           <p class="model" id="car-model">«Заря-965»</p>
-        </div>
-
-        <div class="stage-hint">Зажми мышь — покрутить камеру. Колесо — приблизить.</div>
-
-        <div class="stage-tools">
-          <button class="icon" id="toggle-spin" aria-pressed="true" title="Вращение подиума">⟳</button>
-          <div class="lamps" id="lamps"></div>
-        </div>
-      </main>
-
-      <aside class="panel-right">
-        <!-- Pimp отдельно от характеристик — §2, §4 -->
-        <section class="panel">
-          <h2 class="eyebrow">Pimp</h2>
-          <p class="hint">Косметика. На заезд не влияет.</p>
-          <p class="sub">Окраска</p>
-          <div class="swatches" id="paints"></div>
-          <p class="sub">Номер</p>
-          <input class="plate" id="plate" maxlength="9" value="К 348 ЕЕ" spellcheck="false" />
-        </section>
-
-        <!-- Характеристики: терминология оригинала — §4 -->
-        <section class="panel">
-          <h2 class="eyebrow">Характеристики</h2>
-          <table class="specs" id="specs"></table>
-          <div class="rating">
-            <span>Рейтинг машины</span>
-            <b id="rating">—</b>
+          <table class="sheet card-sheet" id="car-sheet"></table>
+          <p class="ceiling" id="ceiling"></p>
+          <div class="actions">
+            <a class="btn primary" id="race" href="/">На слабо</a>
+            <button class="btn" id="sell" type="button">Продать</button>
           </div>
-          <p class="hint" id="ceiling"></p>
-        </section>
-      </aside>
-    </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Запчасти: тот же ряд деталей с уровнями, что стоял под машиной (§4) -->
+    <section class="strip">
+      <header>
+        <h2>Запчасти</h2>
+        <span class="note" id="parts-note"></span>
+      </header>
+      <div class="parts" id="parts"></div>
+    </section>
+
+    <!-- Гараж списком, не сеткой карточек (§9) -->
+    <section class="strip">
+      <header>
+        <h2>Места в гараже</h2>
+        <span class="note" id="slots-note"></span>
+      </header>
+      <div class="body tight">
+        <ul class="rows garage-rows" id="car-list"></ul>
+      </div>
+    </section>
+
+    <section class="strip">
+      <header>
+        <h2>Последние гонки</h2>
+        <span class="note">Двор против двора: важен не рекорд, а кто именно тебя обошёл</span>
+      </header>
+      <div class="body tight">
+        <ul class="rows log-rows" id="log"></ul>
+      </div>
+    </section>
+
+    <section class="strip">
+      <header><h2>Всего за карьеру</h2></header>
+      <div class="career" id="career"></div>
+    </section>
   </div>
+
+  <footer id="footer"></footer>
   <script type="module" src="/src/garage/boot.ts"></script>
 </body>
 </html>

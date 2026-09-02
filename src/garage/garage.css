@@ -1,255 +1,101 @@
-/* Гараж. Тот же ночной мир, что и заезд: холодный асфальт под тёплыми лампами. */
+/* Гараж. Плотность важнее воздуха: блоки идут встык, отступы минимальные. */
 
-:root {
-  --ground: #0a0d13;
-  --panel: #131822;
-  --panel-lift: #1a202c;
-  --line: #222a3a;
-  --line-soft: #1a202c;
-  --text: #e8ebf0;
-  --dim: #8892a4;
-  --faint: #5b6577;
-  --lamp: #ffb347;
-  --gold: #ffd76a;
-  --win: #3ddc84;
-  --display: 'Oswald', 'Arial Narrow', sans-serif;
-  --body: 'IBM Plex Sans', system-ui, sans-serif;
-  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
-  color-scheme: dark;
+/* Единственный градиент во всём интерфейсе: пятно натриевого фонаря
+   над машиной в шапке гаража. Разрешено дизайн-правилами прямым текстом. */
+.hero {
+  background:
+    radial-gradient(120% 90% at 22% -20%, rgba(224, 123, 57, 0.16), rgba(224, 123, 57, 0) 62%),
+    var(--concrete);
 }
 
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: var(--ground);
-  color: var(--text);
-  font-family: var(--body);
-  font-size: 15px;
-  line-height: 1.55;
-}
-
-.shell { max-width: 1420px; margin: 0 auto; padding: 20px 20px 40px; }
-
-.masthead {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--line);
-}
-
-.mark {
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: 27px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  margin: 0;
-  line-height: 1;
-}
-.mark span { color: var(--lamp); }
-
-.tagline {
-  font-family: var(--display);
-  font-size: 14px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--faint);
-  margin: 0;
-}
-
-/* Две валюты, ровно две — §5 */
-.purse { margin-left: auto; display: flex; gap: 14px; font-family: var(--mono); font-size: 14px; }
-.purse span { display: flex; align-items: center; gap: 6px; }
-.purse span::before {
-  content: '';
-  width: 11px; height: 11px;
-  border-radius: 50%;
-}
-.coin::before { background: #9aa1ab; box-shadow: inset 0 0 0 2px #6f7681; }
-.gold::before { background: var(--gold); box-shadow: inset 0 0 0 2px #b8912f; }
-
-.tabs { display: flex; gap: 14px; font-size: 13px; }
-.tabs a { color: var(--dim); text-decoration: none; }
-.tabs a:hover { color: var(--lamp); }
-
-.layout {
+.hero-grid {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr) 292px;
-  gap: 16px;
-  margin-top: 16px;
-  align-items: start;
-}
-@media (max-width: 1180px) { .layout { grid-template-columns: 208px minmax(0, 1fr); } .panel-right { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } }
-@media (max-width: 760px) { .layout { grid-template-columns: 1fr; } .panel-right { grid-template-columns: 1fr; } }
-
-.eyebrow {
-  font-family: var(--display);
-  font-size: 12px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--faint);
-  margin: 0 0 12px;
-  font-weight: 500;
+  grid-template-columns: minmax(0, 1fr) 300px;
 }
 
-.panel, .cars {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  padding: 15px 16px;
-}
-.panel-right { display: grid; gap: 16px; }
+.stage { position: relative; border-right: 1px solid var(--concrete-lt); background: var(--pit); }
+#scene { display: block; width: 100%; height: 300px; }
 
-/* Гараж списком, а не плитками — §9 */
-.cars ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
-.cars li { display: block; }
-.cars button {
-  width: 100%;
+.stage-note {
+  position: absolute;
+  inset: 0;
+  margin: 0;
   display: grid;
-  grid-template-columns: 22px 1fr auto;
-  align-items: baseline;
-  gap: 9px;
-  padding: 9px 10px;
+  place-items: center;
+  color: var(--chalk-faint);
+  background: var(--pit);
+}
+.stage-note[hidden] { display: none; }
+
+.stage-spin { position: absolute; right: 8px; bottom: 8px; }
+.stage-spin[aria-pressed='false'] { color: var(--chalk-faint); }
+
+.plate-card { padding: 12px 14px; display: flex; flex-direction: column; }
+.plate-card h1 { font-size: 34px; font-weight: 600; }
+.plate-card .model { margin: 2px 0 10px; color: var(--chalk-dim); }
+
+.card-sheet td { padding: 4px 0; }
+.card-sheet td:first-child { width: 45%; }
+
+.ceiling { margin: 10px 0 0; color: var(--chalk-faint); font-size: 12px; }
+.actions { display: flex; gap: 8px; margin-top: auto; padding-top: 14px; }
+.actions .btn { flex: 1 1 auto; }
+
+/* Ряд запчастей: семь клеток встык, уровень цифрой (не полоской) */
+.parts { display: grid; grid-template-columns: repeat(7, 1fr); }
+
+.part {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px 10px;
   background: transparent;
   border: 0;
-  border-left: 2px solid transparent;
-  color: var(--dim);
+  border-left: 1px solid var(--concrete-lt);
+  color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.cars button:hover { background: var(--panel-lift); color: var(--text); }
-.cars button[aria-current='true'] {
-  background: var(--panel-lift);
-  border-left-color: var(--lamp);
-  color: var(--text);
-}
-.cars .klass {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--faint);
-}
-.cars button[aria-current='true'] .klass { color: var(--lamp); }
-.cars .nick { font-size: 14px; }
-.cars .hp { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.part:first-child { border-left: 0; }
+.part:hover { background: var(--concrete-lt); }
+.part[disabled] { cursor: default; color: var(--chalk-faint); }
+.part[disabled]:hover { background: transparent; }
 
-/* Сцена */
-.stage { position: relative; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; background: #090c12; }
-#scene { display: block; width: 100%; height: 560px; }
-@media (max-width: 760px) { #scene { height: 380px; } }
+.part .name { font-size: 12px; color: var(--chalk-dim); }
+.part .level { font-family: var(--display); font-size: 22px; line-height: 1; }
+.part .level small { font-size: 13px; color: var(--chalk-faint); }
+.part .price { font-size: 12px; color: var(--chalk-faint); }
+.part[disabled] .level { color: var(--chalk-faint); }
 
-.stage-loading {
-  position: absolute; inset: 0;
-  display: grid; place-items: center;
-  font-family: var(--mono); font-size: 13px; color: var(--faint);
-  background: #090c12;
-  transition: opacity 0.45s ease;
-}
-.stage-loading[hidden] { display: grid; opacity: 0; visibility: hidden; pointer-events: none; }
+/* Список машин */
+.garage-rows .line { grid-template-columns: 26px minmax(0, 1fr) 76px 74px 88px; }
+.garage-rows .klass { font-family: var(--display); font-size: 15px; color: var(--chalk-faint); }
+.garage-rows .line[aria-current='true'] .klass { color: var(--chalk); }
 
-.stage-plate { position: absolute; left: 18px; top: 16px; pointer-events: none; }
-.stage-plate .nick {
-  font-family: var(--display); font-size: 26px; letter-spacing: 1.5px;
-  text-transform: uppercase; margin: 0; line-height: 1;
-}
-.stage-plate .model { margin: 4px 0 0; font-size: 13px; color: var(--faint); }
+/* Лента вызовов */
+.log-rows .line { grid-template-columns: minmax(0, 1fr) 96px 128px; cursor: default; }
+.log-rows .line:hover { background: transparent; }
+.log-rows .who { font-weight: 500; }
+.log-rows .answer { text-align: right; }
 
-.stage-hint {
-  position: absolute; left: 18px; bottom: 14px;
-  font-size: 12px; color: var(--faint); pointer-events: none;
+/* Сводка карьеры: две колонки, как в оригинале */
+.career { display: grid; grid-template-columns: 1fr 1fr; }
+.career table { border-collapse: collapse; width: 100%; }
+.career table:first-child { border-right: 1px solid var(--concrete-lt); }
+
+@media (max-width: 900px) {
+  .hero-grid { grid-template-columns: 1fr; }
+  .stage { border-right: 0; border-bottom: 1px solid var(--concrete-lt); }
+  .parts { grid-template-columns: repeat(4, 1fr); }
+  .part:nth-child(4n + 1) { border-left: 0; }
+  .part:nth-child(n + 5) { border-top: 1px solid var(--concrete-lt); }
+  .career { grid-template-columns: 1fr; }
+  .career table:first-child { border-right: 0; border-bottom: 1px solid var(--concrete-lt); }
 }
 
-.stage-tools { position: absolute; right: 14px; top: 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
-
-button.icon {
-  width: 34px; height: 34px;
-  display: grid; place-items: center;
-  background: rgba(12,16,24,0.78);
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  color: var(--dim);
-  font-size: 17px;
-  cursor: pointer;
+@media (max-width: 620px) {
+  .garage-rows .line { grid-template-columns: 20px minmax(0, 1fr) 64px 42px; gap: 8px; }
+  .garage-rows .line .hide-narrow { display: none; }
+  .log-rows .line { grid-template-columns: minmax(0, 1fr) 110px; }
+  .log-rows .stake { display: none; }
 }
-button.icon[aria-pressed='true'] { color: var(--lamp); border-color: #4a3a1c; }
-button.icon:hover { color: var(--text); }
-
-.lamps { display: grid; gap: 5px; }
-.lamps button {
-  display: flex; align-items: center; gap: 7px;
-  padding: 5px 9px;
-  background: rgba(12,16,24,0.78);
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  color: var(--faint);
-  font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase;
-  font-family: var(--display);
-  cursor: pointer;
-}
-.lamps button::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #2a3040; }
-.lamps button[aria-pressed='true'] { color: var(--text); }
-.lamps button[aria-pressed='true']::before { background: currentColor; box-shadow: 0 0 8px currentColor; }
-
-/* Pimp */
-.hint { font-size: 12px; color: var(--faint); margin: -6px 0 12px; }
-.sub { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); margin: 12px 0 7px; }
-
-.swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
-.swatches button {
-  aspect-ratio: 1;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  cursor: pointer;
-  position: relative;
-}
-.swatches button[aria-pressed='true'] { border-color: var(--lamp); }
-.swatches button[aria-pressed='true']::after {
-  content: '';
-  position: absolute; inset: -4px;
-  border: 1px solid var(--lamp);
-  border-radius: 2px;
-}
-
-/* Номер свободным текстом — §4 */
-.plate {
-  width: 100%;
-  font-family: var(--mono);
-  font-size: 17px;
-  letter-spacing: 3px;
-  text-align: center;
-  text-transform: uppercase;
-  color: #16181d;
-  background: #e6e8ea;
-  border: 1px solid #9aa1ab;
-  border-radius: 3px;
-  padding: 7px 8px;
-}
-.plate:focus-visible { outline: 2px solid var(--lamp); outline-offset: 2px; }
-
-/* Характеристики таблицей — §9 */
-.specs { width: 100%; border-collapse: collapse; }
-.specs td { padding: 5px 0; vertical-align: middle; }
-.specs td:first-child { font-size: 13px; color: var(--dim); width: 96px; }
-.specs td:last-child { width: 26px; text-align: right; font-family: var(--mono); font-size: 13px; }
-.specs .track { display: flex; gap: 2px; }
-.specs .track i {
-  flex: 1;
-  height: 10px;
-  background: var(--line-soft);
-  border-radius: 1px;
-}
-.specs .track i.on { background: var(--lamp); }
-.specs .track i.head { background: var(--gold); }
-
-.rating {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
-}
-.rating span { font-size: 13px; color: var(--dim); }
-.rating b { font-family: var(--mono); font-size: 22px; color: var(--lamp); }
-
-:focus-visible { outline: 2px solid var(--lamp); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

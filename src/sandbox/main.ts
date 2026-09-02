@@ -6,7 +6,8 @@
  * с расчётом. Скрипт scripts/balance.ts делает то же самое автоматически.
  */
 
-import '../styles.css';
+import '../ui/theme.css';
+import './sandbox.css';
 import {
   CAR_MODELS, MAX_SPEC_LEVEL, bestConfigFor, favouriteStakeMultiplier, getModel,
   horsepower, randomSeed, resolve, underdogExpectedValue,
@@ -14,6 +15,7 @@ import {
   type Side, type SpecKey, type Tires, type WeightCut,
 } from '../core/index.ts';
 import type { RaceInput } from '../core/race.ts';
+import { mountChrome, mountFooter } from '../ui/chrome.ts';
 
 const SPEC_LABELS: Record<SpecKey, string> = {
   tires: 'Шины',
@@ -54,7 +56,7 @@ function fill(level: number): Record<SpecKey, number> {
 }
 
 const sidesBox = document.getElementById('sides') as HTMLElement;
-const oddsBox = document.getElementById('odds') as HTMLElement;
+const oddsBox = document.getElementById('odds') as HTMLTableElement;
 const outBox = document.getElementById('out') as HTMLElement;
 const seedInput = document.getElementById('seed') as HTMLInputElement;
 
@@ -76,15 +78,23 @@ function input(seed = seedInput.value): RaceInput {
 }
 
 function buildSide(side: Side): HTMLElement {
-  const panel = document.createElement('div');
-  panel.className = 'panel';
-  panel.innerHTML = `<h2>Машина ${side.toUpperCase()}</h2>`;
+  const panel = document.createElement('section');
+  panel.className = 'strip';
+  const head = document.createElement('header');
+  const title = document.createElement('h2');
+  title.textContent = `Машина ${side.toUpperCase()}`;
+  head.append(title);
+  panel.append(head);
+
+  const body = document.createElement('div');
+  body.className = 'body';
+  panel.append(body);
 
   const model = document.createElement('select');
   for (const item of CAR_MODELS) {
     const option = document.createElement('option');
     option.value = item.id;
-    option.textContent = `${item.klass} · ${item.nick} — ${item.name}`;
+    option.textContent = `${item.klass}  ${item.nick}  ${item.name}`;
     model.append(option);
   }
   model.value = state[side].car.modelId;
@@ -96,7 +106,7 @@ function buildSide(side: Side): HTMLElement {
   modelField.className = 'field';
   modelField.innerHTML = '<label>Модель</label>';
   modelField.append(model);
-  panel.append(modelField);
+  body.append(modelField);
 
   for (const key of Object.keys(SPEC_LABELS) as SpecKey[]) {
     const field = document.createElement('div');
@@ -116,7 +126,7 @@ function buildSide(side: Side): HTMLElement {
       refresh();
     });
     field.append(range, value);
-    panel.append(field);
+    body.append(field);
   }
 
   for (const item of CONFIG_FIELDS) {
@@ -141,16 +151,18 @@ function buildSide(side: Side): HTMLElement {
       refresh();
     });
     field.append(select);
-    panel.append(field);
+    body.append(field);
   }
 
   const best = document.createElement('button');
+  best.type = 'button';
+  best.className = 'btn small';
   best.textContent = 'Настроить идеально под условия';
   best.addEventListener('click', () => {
     state[side].config = bestConfigFor(conditions());
     render();
   });
-  panel.append(best);
+  body.append(best);
   return panel;
 }
 
@@ -162,39 +174,50 @@ function render(): void {
 function refresh(): void {
   const current = input();
   const outcome = resolve(current);
-  const rows: string[] = [];
+  const rows: HTMLTableRowElement[] = [];
 
   for (const side of ['a', 'b'] as const) {
     const odds = outcome[side];
     const model = getModel(current[side].car.modelId);
-    rows.push(`
-      <div class="stat" style="margin-top:8px"><span>Машина ${side.toUpperCase()}</span>
-        <b>${model.nick} · класс ${model.klass} · ${horsepower(current[side].car)} л.с.</b></div>
-      <div class="stat"><span>Сила</span><b>${odds.strength.toFixed(1)}</b></div>
-      <div class="stat"><span>Качество настройки</span><b>${(odds.tuning.quality * 100).toFixed(1)}%</b></div>
-      <div class="bar"><i style="width:${(odds.tuning.quality * 100).toFixed(0)}%"></i></div>
-      <div class="stat"><span>Эффективная сила</span><b>${odds.eff.toFixed(1)}</b></div>
-      <div class="muted">${
-        Object.entries(odds.tuning.axes)
-          .map(([axis, score]) => `${axis} ${(score * 100).toFixed(0)}%`).join(' · ')
-      }</div>
-      <div class="muted">маркеры: ${
-        Object.entries(odds.tuning.flags).filter(([, on]) => on).map(([flag]) => flag).join(', ') || '—'
-      }</div>`);
+    rows.push(row(`Машина ${side.toUpperCase()}`, `${model.nick}, класс ${model.klass}`, 'head'));
+    rows.push(row('Мощность', `${horsepower(current[side].car)} л.с.`));
+    rows.push(row('Сила', odds.strength.toFixed(1)));
+    rows.push(row('Качество настройки', `${(odds.tuning.quality * 100).toFixed(1)}%`));
+    rows.push(row('Эффективная сила', odds.eff.toFixed(1)));
+    rows.push(row(
+      'Оси настройки',
+      Object.entries(odds.tuning.axes).map(([axis, score]) => `${axis} ${(score * 100).toFixed(0)}%`).join('   '),
+      'flags',
+    ));
+    rows.push(row(
+      'Маркеры ошибок',
+      Object.entries(odds.tuning.flags).filter(([, on]) => on).map(([flag]) => flag).join(', ') || 'нет',
+      'flags',
+    ));
   }
 
   const p = outcome.pWinA;
   const underdog = Math.min(p, 1 - p);
-  rows.push(`
-    <div class="stat" style="margin-top:14px"><span>Шанс A</span><b>${(p * 100).toFixed(2)}%</b></div>
-    <div class="stat"><span>Шанс B</span><b>${((1 - p) * 100).toFixed(2)}%</b></div>
-    <div class="stat"><span>Разница в силе</span><b>x${outcome.strengthRatio.toFixed(3)}</b></div>
-    <div class="stat"><span>Ставка фаворита в вызове</span><b>x${favouriteStakeMultiplier(underdog).toFixed(2)}</b></div>
-    <div class="stat"><span>Ожидание аутсайдера</span><b>${underdogExpectedValue(underdog).toFixed(3)}</b></div>
-    <div class="stat"><span>На этом сиде побеждает</span><b>${outcome.winner.toUpperCase()}</b></div>`);
+  rows.push(row('Шанс A', `${(p * 100).toFixed(2)}%`, 'head'));
+  rows.push(row('Шанс B', `${((1 - p) * 100).toFixed(2)}%`));
+  rows.push(row('Разница в силе', `x${outcome.strengthRatio.toFixed(3)}`));
+  rows.push(row('Ставка фаворита в вызове', `x${favouriteStakeMultiplier(underdog).toFixed(2)}`));
+  rows.push(row('Ожидание аутсайдера', underdogExpectedValue(underdog).toFixed(3)));
+  rows.push(row('На этом сиде забирает', outcome.winner.toUpperCase()));
 
-  oddsBox.innerHTML = rows.join('');
+  oddsBox.replaceChildren(...rows);
   console.log('расклад', outcome);
+}
+
+function row(label: string, value: string, className = ''): HTMLTableRowElement {
+  const tr = document.createElement('tr');
+  if (className) tr.className = className;
+  const left = document.createElement('td');
+  left.textContent = label;
+  const right = document.createElement('td');
+  right.textContent = value;
+  tr.append(left, right);
+  return tr;
 }
 
 function batch(n: number): void {
@@ -238,4 +261,6 @@ seedInput.addEventListener('input', refresh);
 const fromUrl = new URLSearchParams(location.search).get('seed');
 if (fromUrl) seedInput.value = fromUrl;
 
+mountChrome('none', { withPurse: false });
+mountFooter();
 render();

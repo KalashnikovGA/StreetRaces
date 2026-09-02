@@ -231,7 +231,7 @@ export class RaceScene {
       const cell = 9;
       for (let row = 0; row * cell < h * 0.44; row++) {
         for (let col = 0; col < 2; col++) {
-          ctx.fillStyle = (row + col) % 2 === 0 ? '#e9ecf2' : '#20232b';
+          ctx.fillStyle = (row + col) % 2 === 0 ? PALETTE.marking : PALETTE.skyTop;
           ctx.fillRect(finishX + col * cell, h * 0.54 + row * cell, cell, cell);
         }
       }
@@ -343,24 +343,25 @@ export class RaceScene {
       this.options.onLights?.(step);
     }
     // Дерево лежит горизонтально между панелью гонщиков и дорогой: вертикальное
-    // на этой ширине налезает на имя соперника.
-    const lamp = 15;
+    // на этой ширине налезает на имя соперника. На узком экране ужимается
+    // тем же коэффициентом, что и панель.
+    const lamp = 15 * Math.max(0.66, Math.min(1, w / 900));
     const spacing = lamp * 3.1;
     const total = spacing * 3;
     const cx = w / 2 - total / 2;
     const cy = this.height * 0.40;
     ctx.save();
-    ctx.fillStyle = 'rgba(8,10,16,0.82)';
+    ctx.fillStyle = 'rgba(16,18,20,0.84)';
     ctx.fillRect(cx - lamp * 2, cy - lamp * 1.9, total + lamp * 4, lamp * 3.8);
     for (let i = 0; i < 4; i++) {
       const on = this.lastLightStep >= i;
       const green = i === 3;
       ctx.beginPath();
       ctx.arc(cx + i * spacing, cy, lamp, 0, Math.PI * 2);
-      ctx.fillStyle = on ? (green ? '#3ddc84' : PALETTE.accent) : '#232733';
+      ctx.fillStyle = on ? (green ? PALETTE.gateLight : PALETTE.accent) : '#2a2e31';
       if (on) {
-        ctx.shadowColor = green ? '#3ddc84' : PALETTE.accent;
-        ctx.shadowBlur = 24;
+        ctx.shadowColor = green ? PALETTE.gateLight : PALETTE.accent;
+        ctx.shadowBlur = 14;
       }
       ctx.fill();
       ctx.shadowBlur = 0;
@@ -371,32 +372,35 @@ export class RaceScene {
   private drawHud(frame: Frame, t: number): void {
     const { ctx, options } = this;
     const w = this.width;
+    // На узком экране панель гонщиков едет по той же сетке, только мельче:
+    // иначе имя соперника налезает на светофор.
+    const k = Math.max(0.66, Math.min(1, w / 900));
     ctx.save();
-    ctx.font = '600 15px system-ui, sans-serif';
     for (const side of ['a', 'b'] as const) {
       const visual = options.visuals[side];
       const state = frame[side];
-      const x = side === 'a' ? 18 : w / 2 + 18;
+      const x = side === 'a' ? 14 * k : w / 2 + 14 * k;
       ctx.fillStyle = PALETTE.text;
-      ctx.fillText(visual.name, x, 30);
-      ctx.font = '400 13px system-ui, sans-serif';
+      ctx.font = `500 ${(17 * k).toFixed(0)}px Oswald, sans-serif`;
+      ctx.fillText(visual.name, x, 30 * k);
+      ctx.font = `400 ${(13 * k).toFixed(0)}px Onest, system-ui, sans-serif`;
       ctx.fillStyle = PALETTE.textDim;
       const model = getModel(this.modelOf(side));
-      ctx.fillText(`${model.nick} · ${horsepower(options.input[side].car)} л.с.`, x, 50);
+      // Точек-разделителей в мета-строках нет нигде в игре — только слова.
+      ctx.fillText(`${model.nick}, ${horsepower(options.input[side].car)} л.с.`, x, 50 * k);
       ctx.fillStyle = PALETTE.accent;
-      ctx.font = '600 22px system-ui, sans-serif';
-      ctx.fillText(`${Math.round(state.speed * 3.6)}`, x, 80);
-      ctx.font = '400 12px system-ui, sans-serif';
+      ctx.font = `500 ${(26 * k).toFixed(0)}px Oswald, sans-serif`;
+      ctx.fillText(`${Math.round(state.speed * 3.6)}`, x, 80 * k);
+      ctx.font = `400 ${(12 * k).toFixed(0)}px Onest, system-ui, sans-serif`;
       ctx.fillStyle = PALETTE.textDim;
-      ctx.fillText('км/ч', x + 44, 80);
-      ctx.fillText(`передача ${state.gear}`, x, 100);
-      ctx.font = '600 15px system-ui, sans-serif';
+      ctx.fillText('км/ч', x + 48 * k, 80 * k);
+      ctx.fillText(`передача ${state.gear}`, x, 100 * k);
     }
     // Пройденная дистанция по центру.
     if (t >= 0) {
       ctx.textAlign = 'center';
       ctx.fillStyle = PALETTE.textDim;
-      ctx.font = '400 13px system-ui, sans-serif';
+      ctx.font = '400 13px Onest, system-ui, sans-serif';
       const done = Math.round(Math.max(frame.a.distance, frame.b.distance));
       ctx.fillText(`${done} / ${options.result.trackLength} м`, w / 2, this.height - 14);
     }
@@ -409,13 +413,13 @@ export class RaceScene {
     const winner = options.visuals[options.result.winner];
     ctx.save();
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(10,12,18,0.72)';
+    ctx.fillStyle = 'rgba(16,18,20,0.76)';
     ctx.fillRect(w / 2 - 210, this.height * 0.30, 420, 92);
     ctx.fillStyle = PALETTE.accent;
-    ctx.font = '700 34px system-ui, sans-serif';
+    ctx.font = '600 38px Oswald, sans-serif';
     ctx.fillText(winner.name, w / 2, this.height * 0.30 + 44);
     ctx.fillStyle = PALETTE.textDim;
-    ctx.font = '400 15px system-ui, sans-serif';
+    ctx.font = '400 15px Onest, system-ui, sans-serif';
     const gap = Math.abs(options.result.finishTime.a - options.result.finishTime.b);
     ctx.fillText(
       options.result.photoFinish ? 'фотофиниш' : `+${gap.toFixed(2)} с`,

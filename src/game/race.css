@@ -1,0 +1,61 @@
+/* Заезд. Единственный экран, где движение работает в полную силу. */
+
+canvas.track {
+  display: block;
+  width: 100%;
+  height: 380px;
+  background: var(--pit);
+  border-bottom: 1px solid var(--concrete-lt);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.verdict {
+  margin-left: auto;
+  font-family: var(--display);
+  font-size: 19px;
+  text-align: right;
+}
+
+/* Сравнение двух машин колонками: числа стоят друг под другом и читаются
+   как таблица рейтинга, а не как два разных блока. */
+.compare { table-layout: fixed; }
+.compare td, .compare th { padding: 5px 12px; }
+.compare th {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 500;
+  text-align: right;
+  border-bottom: 1px solid var(--concrete-lt);
+}
+.compare th:first-child { text-align: left; color: var(--chalk-dim); font-size: 14px; }
+.compare td { text-align: right; border-top: 1px solid var(--concrete-lt); }
+.compare td:first-child { text-align: left; color: var(--chalk-dim); }
+.compare tr.key td { font-family: var(--display); font-size: 18px; }
+.compare tr.key td:first-child { font-family: var(--body); font-size: 14px; }
+
+.share { display: flex; gap: 8px; }
+.share input { flex: 1 1 auto; min-width: 0; }
+
+pre.out {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--pit);
+  border-top: 1px solid var(--concrete-lt);
+  font: 12px/1.5 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: var(--chalk-dim);
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow: auto;
+}
+
+@media (max-width: 700px) {
+  canvas.track { height: 260px; }
+  .bar { flex-wrap: wrap; }
+  .verdict { margin-left: 0; width: 100%; text-align: left; }
+}
