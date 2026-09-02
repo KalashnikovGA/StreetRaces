@@ -6,7 +6,7 @@
  */
 
 import {
-  CAR_MODELS, CLASS_ORDER, MAX_SPEC_LEVEL, allConfigs, bestConfigFor, botCharacter, botConfig,
+  ALL_MODELS, CLASS_ORDER, MAX_SPEC_LEVEL, allConfigs, bestConfigFor, botCharacter, botConfig,
   effective, emptySpecs, evaluateTuning, favouriteStakeMultiplier, makeRng, maxedCar,
   race, resolve, stockCar, strength, underdogExpectedValue, winProbability,
   type BotSkill, type Car, type CarClass, type Conditions, type RaceConfig, type SpecKey,
@@ -243,7 +243,7 @@ function carWithProgress(rng: () => number, modelId: string): Car {
 }
 
 function modelsOfClass(klass: CarClass): string[] {
-  return CAR_MODELS.filter((m) => m.klass === klass).map((m) => m.id);
+  return ALL_MODELS.filter((m) => m.klass === klass).map((m) => m.id);
 }
 
 function carInClass(rng: () => number, klass: CarClass): Car {

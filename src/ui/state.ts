@@ -37,24 +37,12 @@ const START_PURSE: Purse = { coins: 148_200, gold: 36 };
 
 const START_OWNED: Owned[] = [
   {
-    car: { modelId: 'zarya965', specs: { tires: 8, ignition: 7, clutch: 6, suspension: 5, boost: 9, intake: 7, radiator: 4 } },
-    paint: 'red', plate: 'К 348 ЕЕ', wins: 47, losses: 19,
-  },
-  {
-    car: { modelId: 'lada6', specs: { tires: 4, ignition: 3, clutch: 3, suspension: 2, boost: 5, intake: 4, radiator: 3 } },
-    paint: 'white', plate: 'О 006 ОО', wins: 12, losses: 14,
-  },
-  {
-    car: { modelId: 'ronin_gx', specs: { tires: 6, ignition: 6, clutch: 5, suspension: 6, boost: 4, intake: 5, radiator: 6 } },
-    paint: 'cyan', plate: 'Х 777 УЙ', wins: 30, losses: 21,
-  },
-  {
-    car: { modelId: 'lada_sport', specs: { tires: 2, ignition: 1, clutch: 2, suspension: 1, boost: 0, intake: 1, radiator: 2 } },
-    paint: 'black', plate: 'В 001 МР', wins: 3, losses: 8,
+    car: { modelId: 'vogel190', specs: { tires: 6, ignition: 5, clutch: 5, suspension: 6, boost: 4, intake: 5, radiator: 4 } },
+    paint: 'green', plate: 'К 348 ЕЕ', wins: 47, losses: 19,
   },
   {
     car: { modelId: 'bavar_c40', specs: { tires: 5, ignition: 4, clutch: 4, suspension: 5, boost: 3, intake: 4, radiator: 5 } },
-    paint: 'red', plate: 'М 040 УС', wins: 0, losses: 0,
+    paint: 'red', plate: 'М 040 УС', wins: 12, losses: 14,
   },
 ];
 
@@ -110,7 +98,7 @@ export const career = {
   races: 2_842,
   wins: 2_462,
   losses: 380,
-  slots: 6,
+  slots: 4,
   spent: 2_615_705,
   earned: 1_212_500,
   challenged: 403,

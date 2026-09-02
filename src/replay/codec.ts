@@ -7,7 +7,7 @@
  * которая целиком живёт в адресе и открывается у кого угодно без регистрации.
  */
 
-import { CAR_MODELS, MAX_SPEC_LEVEL } from '../core/cars.ts';
+import { MAX_SPEC_LEVEL, REPLAY_ORDER, getModel } from '../core/cars.ts';
 import { GEARINGS, NITROS, PRESSURES, TIRES, WEIGHT_CUTS } from '../core/tuning.ts';
 import type {
   Car, Conditions, Distance, Profile, RaceConfig, Racer, Specs, Surface,
@@ -71,8 +71,10 @@ function base64urlDecode(text: string): Uint8Array {
 const SEED_ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz';
 
 function writeCar(writer: BitWriter, car: Car, config: RaceConfig): void {
-  const modelIndex = CAR_MODELS.findIndex((m) => m.id === car.modelId);
-  if (modelIndex < 0) throw new Error(`Модель вне каталога: ${car.modelId}`);
+  // Индекс берётся из неизменяемого порядка, а не из списка машин в игре:
+  // список меняется, а разосланные ссылки — нет.
+  const modelIndex = REPLAY_ORDER.indexOf(car.modelId);
+  if (modelIndex < 0) throw new Error(`Модель вне порядка повторов: ${car.modelId}`);
   writer.write(modelIndex, 6);
   for (const key of SPEC_ORDER) {
     writer.write(Math.min(MAX_SPEC_LEVEL, Math.max(0, Math.round(car.specs[key]))), 4);
@@ -85,7 +87,7 @@ function writeCar(writer: BitWriter, car: Car, config: RaceConfig): void {
 }
 
 function readCar(reader: BitReader): { car: Car; config: RaceConfig } {
-  const model = CAR_MODELS[reader.read(6)];
+  const model = getModel(REPLAY_ORDER[reader.read(6)] ?? '');
   if (!model) throw new Error('Повтор ссылается на неизвестную машину');
   const specs = {} as Specs;
   for (const key of SPEC_ORDER) specs[key] = reader.read(4);

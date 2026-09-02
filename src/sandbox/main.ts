@@ -9,7 +9,7 @@
 import '../ui/theme.css';
 import './sandbox.css';
 import {
-  CAR_MODELS, MAX_SPEC_LEVEL, bestConfigFor, favouriteStakeMultiplier, getModel,
+  ALL_MODELS, MAX_SPEC_LEVEL, bestConfigFor, favouriteStakeMultiplier, getModel,
   horsepower, randomSeed, resolve, underdogExpectedValue,
   type Car, type Conditions, type Gearing, type Nitro, type Pressure, type RaceConfig,
   type Side, type SpecKey, type Tires, type WeightCut,
@@ -91,7 +91,9 @@ function buildSide(side: Side): HTMLElement {
   panel.append(body);
 
   const model = document.createElement('select');
-  for (const item of CAR_MODELS) {
+  // Песочница — инструмент баланса, ей нужна вся лестница классов,
+  // а не только машины, попавшие в игру.
+  for (const item of ALL_MODELS) {
     const option = document.createElement('option');
     option.value = item.id;
     option.textContent = `${item.klass}  ${item.nick}  ${item.name}`;
