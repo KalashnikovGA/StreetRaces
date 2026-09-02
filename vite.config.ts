@@ -7,6 +7,7 @@ export default defineConfig({
       input: {
         race: resolve(__dirname, 'index.html'),
         sandbox: resolve(__dirname, 'sandbox.html'),
+        garage: resolve(__dirname, 'garage.html'),
       },
     },
   },

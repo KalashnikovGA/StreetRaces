@@ -27,7 +27,7 @@ export interface Silhouette {
   ride: number;
 }
 
-const SILHOUETTES: Record<string, Silhouette> = {
+export const SILHOUETTES: Record<string, Silhouette> = {
   // «Корытце»: короткий пузырь, колёса по краям, крыша высокая.
   zarya965: {
     body: [[0.04, 0.78], [0.06, 0.52], [0.22, 0.48], [0.34, 0.20], [0.62, 0.18], [0.74, 0.47], [0.94, 0.52], [0.96, 0.78]],
@@ -146,15 +146,17 @@ export function drawCar(ctx: CanvasRenderingContext2D, options: DrawCarOptions):
   const drop = (pimp.drop ?? 0) * shape.ride * h;
   const paint = PAINTS[pimp.paint] ?? pimp.paint ?? PAINTS.white!;
 
+  // Занижение опускает кузов К колёсам, а не поднимает над ними: колёса и тень
+  // остаются на земле, поэтому компенсируют сдвиг обратно.
   ctx.save();
-  ctx.translate(0, -drop + options.squat * h * 0.02);
+  ctx.translate(0, drop + options.squat * h * 0.02);
 
   // Слой 1: тень под машиной.
   ctx.save();
   ctx.globalAlpha = 0.5;
   ctx.fillStyle = PALETTE.shadow;
   ctx.beginPath();
-  ctx.ellipse(w * 0.5, h * 0.86 + drop, w * 0.44, h * 0.06, 0, 0, Math.PI * 2);
+  ctx.ellipse(w * 0.5, h * 0.86 - drop, w * 0.44, h * 0.06, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
@@ -166,8 +168,8 @@ export function drawCar(ctx: CanvasRenderingContext2D, options: DrawCarOptions):
     ctx.strokeStyle = pimp.neon;
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(w * 0.16, h * 0.8 + drop);
-    ctx.lineTo(w * 0.84, h * 0.8 + drop);
+    ctx.moveTo(w * 0.16, h * 0.8);
+    ctx.lineTo(w * 0.84, h * 0.8);
     ctx.stroke();
     ctx.restore();
   }
@@ -221,7 +223,7 @@ export function drawCar(ctx: CanvasRenderingContext2D, options: DrawCarOptions):
   // Слой 8: колёса поверх кузова — так видно диски и вращение.
   for (const wheel of shape.wheels) {
     const cx = wheel.x * w;
-    const cy = wheel.y * h + drop;
+    const cy = wheel.y * h - drop;
     const r = wheel.r * w;
     ctx.fillStyle = PALETTE.rubber;
     ctx.beginPath();
