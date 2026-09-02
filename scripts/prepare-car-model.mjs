@@ -1,0 +1,257 @@
+/**
+ * Подготовка исходной 3D-модели машины к игре.
+ *
+ * На вход — GLB как его отдал автор: с текстурами, салоном, двигателем и
+ * шильдиками, весом в десятки мегабайт. На выходе — модель для витрины
+ * в гараже: четыре меша с именами слоёв пайплайна, кузов красится параметром,
+ * вес в сотни килобайт.
+ *
+ *   node scripts/prepare-car-model.mjs <вход.glb> <id-машины> [--cell 0.018]
+ *
+ * Браузер берётся из playwright (`npx playwright install chromium`);
+ * если готовый Chromium лежит в другом месте — CHROMIUM_PATH=/путь/к/chrome.
+ *
+ * Что делает и почему:
+ *
+ * 1. Выбрасывает салон и двигатель — §11: при виде сбоку их не видно,
+ *    а это 40% треугольников.
+ * 2. Выбрасывает шильдики и таблички производителя — логотипы мы не
+ *    воспроизводим (CLAUDE.md, юридические ограничения).
+ * 3. Выбрасывает текстуры: цвет кузова в этой игре параметр, а не файл (§11).
+ * 4. Сливает всё в четыре меша с материалами body, glass, wheel, light.
+ *    Гараж красит материал с именем body — на этом держится окраска.
+ * 5. Децимирует кластеризацией по решётке: вершины в одной ячейке сливаются
+ *    в одну. Честный QEM был бы точнее, но требует внешней зависимости,
+ *    а на витрине высотой 300 пикселей разница не читается.
+ * 6. Ставит машину колёсами на ноль, длиной LENGTH_M метров и носом в +X —
+ *    туда же, куда смотрят процедурные плейсхолдеры.
+ *
+ * Считает three.js в headless-Chromium: движок и браузер уже стоят в проекте,
+ * так что ни одной новой зависимости.
+ */
+
+import { createServer } from 'node:http';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { extname, resolve } from 'node:path';
+import { chromium } from 'playwright';
+
+const [, , input, carId, ...rest] = process.argv;
+
+if (!input || !carId) {
+  console.error('Использование: node scripts/prepare-car-model.mjs <вход.glb> <id-машины> [--cell 0.018]');
+  process.exit(1);
+}
+if (!existsSync(input)) {
+  console.error(`Нет файла: ${input}`);
+  process.exit(1);
+}
+
+const cellIndex = rest.indexOf('--cell');
+const cell = cellIndex >= 0 ? rest[cellIndex + 1] : '0.018';
+const output = `public/models/${carId}.glb`;
+
+// ── страница, которая делает всю работу в браузере ───────────────────────────
+
+const PAGE = `<!doctype html>
+<meta charset="utf-8" />
+<script type="importmap">
+{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}
+</script>
+<script type="module">
+import { BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, Box3, Vector3 } from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+
+/** Салон, двигатель, шильдики и таблички в игру не едут. */
+const DROP = /badge|manufacturerplate|nameplate|logo|emblem|interior|engine|seat|dashboard/i;
+
+/** Материал исходника -> слой пайплайна. Порядок важен: первое совпадение. */
+const GROUPS = [
+  ['glass', /window|windscreen|windshield|glazing/i],
+  ['wheel', /wheel|tyre|tire|rim|calliper|caliper|brake/i],
+  ['light', /light|lamp|headlamp|red_?glass/i],
+  ['body', /paint|body|coloured|colored|base|carbon|grille|kit|panel|trim/i],
+];
+
+const LENGTH_M = 4.6;
+const CELL = Number(new URLSearchParams(location.search).get('cell'));
+
+window.done = null;
+
+/** Слияние вершин по решётке: ячейка -> одна вершина, вырожденные грани вон. */
+function cluster(geometry, cell) {
+  const pos = geometry.getAttribute('position');
+  const index = geometry.getIndex();
+  const count = index ? index.count : pos.count;
+  const at = (i) => (index ? index.getX(i) : i);
+
+  const map = new Map();
+  const verts = [];
+  const remap = new Int32Array(pos.count);
+
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const key = Math.round(x / cell) + ',' + Math.round(y / cell) + ',' + Math.round(z / cell);
+    let slot = map.get(key);
+    if (slot === undefined) {
+      slot = verts.length / 3;
+      map.set(key, slot);
+      verts.push(x, y, z);
+    }
+    remap[i] = slot;
+  }
+
+  const tris = [];
+  for (let i = 0; i < count; i += 3) {
+    const a = remap[at(i)], b = remap[at(i + 1)], c = remap[at(i + 2)];
+    if (a === b || b === c || a === c) continue;
+    tris.push(a, b, c);
+  }
+
+  const out = new BufferGeometry();
+  out.setAttribute('position', new Float32BufferAttribute(verts, 3));
+  out.setIndex(tris);
+  out.computeVertexNormals();
+  return out;
+}
+
+const LOOK = {
+  body: { color: 0xffffff, roughness: 0.42, metalness: 0.15 },
+  glass: { color: 0x20262b, roughness: 0.15, metalness: 0, transparent: true, opacity: 0.55 },
+  wheel: { color: 0x1a1c1e, roughness: 0.55, metalness: 0 },
+  light: { color: 0xd8d5ce, roughness: 0.25, metalness: 0 },
+};
+
+new GLTFLoader().load('/car.glb', (gltf) => {
+  const car = gltf.scene;
+  car.updateWorldMatrix(true, true);
+
+  const buckets = new Map(GROUPS.map(([name]) => [name, []]));
+  let dropped = 0;
+
+  car.traverse((node) => {
+    if (!node.isMesh) return;
+    const label = (node.material?.name ?? '') + ' ' + (node.name ?? '');
+    if (DROP.test(label)) { dropped++; return; }
+    const hit = GROUPS.find(([, re]) => re.test(label));
+    if (!hit) { dropped++; return; }
+    const geometry = new BufferGeometry();
+    const src = node.geometry.index ? node.geometry.toNonIndexed() : node.geometry;
+    geometry.setAttribute('position', src.getAttribute('position').clone());
+    geometry.applyMatrix4(node.matrixWorld);
+    buckets.get(hit[0]).push(geometry);
+  });
+
+  // Габарит в единицах исходника: решётка задаётся в метрах, а модель
+  // приходит в своём масштабе — без пересчёта ячейка врёт в сотни раз.
+  const merged = new Map();
+  const whole = new Box3();
+  for (const [name, list] of buckets) {
+    if (list.length === 0) continue;
+    const one = BufferGeometryUtils.mergeGeometries(list, false);
+    one.computeBoundingBox();
+    whole.union(one.boundingBox);
+    merged.set(name, one);
+  }
+  const rawSize = whole.getSize(new Vector3());
+  const cellUnits = CELL * (Math.max(rawSize.x, rawSize.z) / LENGTH_M);
+
+  const group = new Group();
+  const stats = {};
+  for (const [name, geometry] of merged) {
+    const before = geometry.getAttribute('position').count / 3;
+    const decimated = cluster(geometry, cellUnits);
+    stats[name] = { before: Math.round(before), after: decimated.getIndex().count / 3 };
+    const material = new MeshStandardMaterial(LOOK[name]);
+    material.name = name;
+    const mesh = new Mesh(decimated, material);
+    mesh.name = name;
+    group.add(mesh);
+  }
+
+  const box = new Box3().setFromObject(group);
+  const size = box.getSize(new Vector3());
+  const centre = box.getCenter(new Vector3());
+  const alongX = size.x >= size.z;
+  const scale = LENGTH_M / (alongX ? size.x : size.z);
+  // Плейсхолдеры лежат длиной по X и носом в +X. Модель, снятая длиной по Z,
+  // доворачивается на 90°, иначе в гараже она стоит боком к остальным.
+  const turn = alongX ? 0 : Math.PI / 2;
+
+  for (const mesh of group.children) {
+    mesh.geometry.translate(-centre.x, -box.min.y, -centre.z);
+    mesh.geometry.scale(scale, scale, scale);
+    mesh.geometry.rotateY(turn);
+  }
+
+  new GLTFExporter().parse(group, (glb) => {
+    const bytes = new Uint8Array(glb);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    window.done = {
+      glb: btoa(binary),
+      stats,
+      dropped,
+      sizeM: [size.x, size.y, size.z].map((v) => +(v * scale).toFixed(2)),
+    };
+  }, (error) => { window.done = { error: String(error) }; }, { binary: true });
+}, undefined, (error) => { window.done = { error: String(error) }; });
+</script>
+`;
+
+// ── статика для страницы ─────────────────────────────────────────────────────
+
+const TYPES = { '.js': 'text/javascript', '.glb': 'model/gltf-binary', '.html': 'text/html' };
+
+const server = createServer((req, res) => {
+  const url = req.url.split('?')[0];
+  try {
+    if (url === '/' || url === '/index.html') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(PAGE);
+      return;
+    }
+    const file = url === '/car.glb'
+      ? resolve(input)
+      : url.startsWith('/three/')
+        ? resolve('node_modules/three', url.slice('/three/'.length))
+        : null;
+    if (!file) { res.writeHead(404).end(); return; }
+    res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
+    res.end(readFileSync(file));
+  } catch {
+    res.writeHead(404).end();
+  }
+});
+
+await new Promise((done) => server.listen(0, done));
+const port = server.address().port;
+
+// В обычной среде браузер ставится через `npx playwright install`.
+// CHROMIUM_PATH нужен там, где готовый Chromium лежит в другом месте.
+const browser = await chromium.launch(
+  process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
+);
+const page = await browser.newPage();
+page.on('pageerror', (error) => console.error('ошибка страницы:', error.message));
+
+await page.goto(`http://localhost:${port}/?cell=${cell}`);
+await page.waitForFunction(() => window.done !== null, null, { timeout: 300_000 });
+const result = await page.evaluate(() => window.done);
+await browser.close();
+server.close();
+
+if (result.error) {
+  console.error('Не собралось:', result.error);
+  process.exit(1);
+}
+
+writeFileSync(output, Buffer.from(result.glb, 'base64'));
+
+console.log(`${input} -> ${output}`);
+console.log(`габарит ${result.sizeM.join(' x ')} м, ячейка ${cell} м, выброшено мешей ${result.dropped}`);
+for (const [name, s] of Object.entries(result.stats)) {
+  console.log(`  ${name.padEnd(6)} ${String(s.before).padStart(7)} -> ${String(s.after).padStart(6)} треугольников`);
+}
+console.log(`вес ${(readFileSync(output).length / 1024).toFixed(0)} КБ`);

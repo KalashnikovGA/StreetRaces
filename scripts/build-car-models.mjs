@@ -20,6 +20,12 @@ import { SILHOUETTES } from '../src/render/car.ts';
 
 const OUT_DIR = 'public/models';
 
+/**
+ * Машины, у которых в public/models лежит рендер из пайплайна, а не
+ * процедурный плейсхолдер. Их GLB собирается отдельно и в git лежит готовым.
+ */
+const REAL_MODELS = new Set(['bavar_c40']);
+
 /** Длина машины в метрах — модель приходит в сцену в реальном масштабе. */
 const LENGTH = 4.0;
 /**
@@ -542,6 +548,11 @@ function buildCar(shape) {
 mkdirSync(OUT_DIR, { recursive: true });
 let total = 0;
 for (const [id, shape] of Object.entries(SILHOUETTES)) {
+  // Машины с настоящей моделью из пайплайна плейсхолдером не перезаписываются.
+  if (REAL_MODELS.has(id)) {
+    console.log(`${id}.glb`.padEnd(22), '     — настоящая модель, пропуск');
+    continue;
+  }
   const glb = buildCar(shape);
   writeFileSync(`${OUT_DIR}/${id}.glb`, glb);
   total += glb.length;

@@ -52,6 +52,10 @@ const START_OWNED: Owned[] = [
     car: { modelId: 'lada_sport', specs: { tires: 2, ignition: 1, clutch: 2, suspension: 1, boost: 0, intake: 1, radiator: 2 } },
     paint: 'black', plate: 'В 001 МР', wins: 3, losses: 8,
   },
+  {
+    car: { modelId: 'bavar_c40', specs: { tires: 5, ignition: 4, clutch: 4, suspension: 5, boost: 3, intake: 4, radiator: 5 } },
+    paint: 'red', plate: 'М 040 УС', wins: 0, losses: 0,
+  },
 ];
 
 /**

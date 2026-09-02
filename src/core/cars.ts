@@ -53,6 +53,7 @@ export const CAR_MODELS: CarModel[] = [
   { id: 'ronin_ss',  name: '«Ronin Supra-S»',nick: 'Супра',    klass: 'B', baseStrength: 194, silhouette: 'Toyota Supra',   priceCoins: 115_000 },
   { id: 'kaiser_r34',name: '«Kaiser R34»',   nick: 'Скай',     klass: 'A', baseStrength: 246, silhouette: 'Nissan Skyline', priceCoins: 340_000 },
   { id: 'corsa_f40', name: '«Corsa F40»',    nick: 'Итальянец',klass: 'A', baseStrength: 262, silhouette: 'Ferrari F40',    priceCoins: 420_000 },
+  { id: 'bavar_c40', name: '«Bavar C40»',    nick: 'Эмка',     klass: 'A', baseStrength: 276, silhouette: 'купе конца 2010-х', priceCoins: 470_000 },
 ];
 
 const MODELS_BY_ID = new Map(CAR_MODELS.map((m) => [m.id, m]));
