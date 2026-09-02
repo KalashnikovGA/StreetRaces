@@ -87,6 +87,9 @@ a:hover { color: var(--sodium); }
 .chrome nav a:first-child { border-left: 1px solid var(--concrete-lt); }
 .chrome nav a:hover { background: var(--concrete-lt); color: var(--chalk); }
 
+.chrome nav a[aria-disabled='true'] { color: var(--chalk-faint); cursor: default; }
+.chrome nav a[aria-disabled='true']:hover { background: transparent; color: var(--chalk-faint); }
+
 /* Активная вкладка отмечена меловой чертой, а не акцентом: натриевый цвет
    на экране один и ведёт к главному действию, а не к навигации. */
 .chrome nav a[aria-current='page'] {

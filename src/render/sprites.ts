@@ -50,6 +50,19 @@ export const SPRITE_READY = new Set([
 const cars = new Map<string, CarSprites | null>();
 const pending = new Map<string, Promise<CarSprites | null>>();
 
+declare global {
+  interface Window {
+    /** Карта «путь спрайта → data-URI». Заполняется только самодостаточной
+     *  сборкой (scripts/build-standalone.mjs), где сети нет вообще. */
+    __sprites?: Record<string, string>;
+  }
+}
+
+/** Путь к спрайту: обычно свой, в самодостаточной странице — вшитый. */
+function asset(path: string): string {
+  return window.__sprites?.[path] ?? path;
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((done, fail) => {
     const image = new Image();
@@ -74,12 +87,12 @@ export function loadCarSprites(modelId: string): Promise<CarSprites | null> {
 
   const job = (async () => {
     try {
-      const response = await fetch(`/sprites/${modelId}/layers.json`);
+      const response = await fetch(asset(`/sprites/${modelId}/layers.json`));
       if (!response.ok) throw new Error('нет манифеста');
       const meta = (await response.json()) as CarSpriteMeta;
       const images = Object.fromEntries(
         await Promise.all(
-          LAYERS.map(async (layer) => [layer, await loadImage(`/sprites/${modelId}/${layer}.png`)]),
+          LAYERS.map(async (layer) => [layer, await loadImage(asset(`/sprites/${modelId}/${layer}.png`))]),
         ),
       ) as Record<CarLayer, HTMLImageElement>;
       const sprites: CarSprites = { meta, images };
@@ -163,7 +176,7 @@ export function loadSceneSprites(): Promise<SceneSprites> {
   scenePending = (async () => {
     for (const name of ['wall', 'road'] as const) {
       try {
-        scene[name] = await loadImage(`/sprites/scene/${name}.png`);
+        scene[name] = await loadImage(asset(`/sprites/scene/${name}.png`));
       } catch {
         scene[name] = null;
       }
