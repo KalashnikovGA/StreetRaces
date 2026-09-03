@@ -9,7 +9,7 @@
  * подвеске. Дальше картинка стоит: одно оркестрованное движение на экран.
  */
 
-import { CAR_MAX_WIDTH, drawCar } from '../render/car.ts';
+import { drawCar } from '../render/car.ts';
 import { PALETTE, PAINTS } from '../render/palette.ts';
 import { loadCarSprites, loadSceneSprites, sceneSprites, tileMirrored } from '../render/sprites.ts';
 
@@ -18,8 +18,11 @@ export interface StageOptions {
   onReady?: () => void;
 }
 
-/** Сколько ширины бокса занимает машина, но не шире CAR_MAX_WIDTH. */
-const CAR_SHARE = 0.66;
+/**
+ * Сколько ширины бокса занимает машина. В «Уличных гонках» витрина была
+ * крупной: машина почти во весь бокс, а не фигурка посреди пустого гаража.
+ */
+const CAR_SHARE = 0.92;
 /** Линия пола в долях высоты. */
 const FLOOR = 0.86;
 /** Где стена встречается с полом. */
@@ -127,7 +130,7 @@ export class Stage {
 
     if (!this.modelId) return;
 
-    const carWidth = Math.min(w * CAR_SHARE, CAR_MAX_WIDTH);
+    const carWidth = Math.min(w * CAR_SHARE, (h * 0.62) / 0.42);
     const carHeight = carWidth * 0.42;
 
     // Заезд в бокс: машина приходит справа и тормозит по экспоненте.

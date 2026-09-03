@@ -74,8 +74,9 @@ const PAGE = `<!doctype html>
 <script type="module">
 import {
   AgXToneMapping, AmbientLight, Box3, HemisphereLight, LinearSRGBColorSpace, Mesh,
-  MeshPhysicalMaterial, MeshStandardMaterial, OrthographicCamera, RectAreaLight,
-  Scene, SRGBColorSpace, Vector3, WebGLRenderer,
+  MeshDepthMaterial, MeshNormalMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
+  NoToneMapping, OrthographicCamera, RectAreaLight, RGBADepthPacking, Scene,
+  SRGBColorSpace, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
@@ -206,6 +207,140 @@ function shoot() {
   return { png: readback.toDataURL('image/png'), pixels: ctx.getImageData(0, 0, W, H).data };
 }
 
+/**
+ * Служебный снимок в крупном разрешении: нормаль и глубина, по ним ищутся
+ * контурные линии.
+ *
+ * Снимается мимо экрана, в буфер без сглаживания. Сглаживание тут не помощь,
+ * а порча: глубина упакована в четыре байта, и усреднение двух соседних
+ * значений на границе треугольников даёт не среднюю глубину, а мусор —
+ * контур после этого обводит каждый треугольник сетки. Заодно буфер минует
+ * тональную кривую и sRGB, которые сделали бы с числом то же самое.
+ */
+const RAW_W = W * SS, RAW_H = H * SS;
+const rawTarget = new WebGLRenderTarget(RAW_W, RAW_H, { samples: 0 });
+function shootRaw(buffer) {
+  renderer.setRenderTarget(rawTarget);
+  renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+  renderer.readRenderTargetPixels(rawTarget, 0, 0, RAW_W, RAW_H, buffer);
+  return buffer;
+}
+
+/**
+ * Рисованное затенение: сначала сильно размыть, потом разложить на ступени.
+ *
+ * Размытие убирает рельеф — все бугры, стыки панелей и следы децимации,
+ * из-за которых кузов выглядел куском фотографии. Ступени превращают
+ * оставшийся плавный перепад в две-три ровные плоскости: ровно так рисуют
+ * машину сбоку, светлый верх и тёмный низ одной заливкой.
+ *
+ * Форму после этого держит не затенение, а контурная линия — она рисуется
+ * отдельным слоем и кладётся поверх.
+ *
+ * Тональные полосы three.js (MeshToonMaterial) тут не годятся: они не
+ * освещаются площадными лампами, а весь наш риг построен на них.
+ */
+function flatten(canvas, { blur, levels }) {
+  const w = canvas.width, h = canvas.height;
+  const g = canvas.getContext('2d');
+
+  if (blur > 0) {
+    const copy = document.createElement('canvas');
+    copy.width = w; copy.height = h;
+    const c = copy.getContext('2d');
+    c.filter = 'blur(' + blur.toFixed(2) + 'px)';
+    c.drawImage(canvas, 0, 0);
+    c.filter = 'none';
+    // Размытие съело кромку — возвращаем исходную альфу.
+    c.globalCompositeOperation = 'destination-in';
+    c.drawImage(canvas, 0, 0);
+    c.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, w, h);
+    g.drawImage(copy, 0, 0);
+  }
+
+  if (!levels || levels.length < 2) return canvas;
+
+  const image = g.getImageData(0, 0, w, h);
+  const px = image.data;
+  const bands = levels.length;
+  for (let i = 0; i < px.length; i += 4) {
+    // Почти прозрачные пиксели не трогаем. Фильтр восстановления размазывает
+    // по кадру еле заметный след, и ступень вытянула бы его в видимую дымку
+    // вокруг фар и стёкол.
+    if (px[i + 3] < 24) continue;
+    const luma = px[i] * 0.2126 + px[i + 1] * 0.7152 + px[i + 2] * 0.0722;
+    if (luma < 1) continue;
+    // Куда попал пиксель — та ступень ему и достаётся. Уровни ступеней
+    // заданы явно: равные доли уводят самую тёмную полосу почти в чёрное,
+    // и кузов после умножения на цвет становится грязным.
+    const step = Math.min(bands - 1, Math.floor((luma / 256) * bands));
+    const target = levels[step] * 255;
+    // Потолок усиления: иначе почти чёрный пиксель в тени улетает в белое.
+    const gain = Math.min(4, target / luma);
+    px[i] = Math.min(255, px[i] * gain);
+    px[i + 1] = Math.min(255, px[i + 1] * gain);
+    px[i + 2] = Math.min(255, px[i + 2] * gain);
+  }
+  g.putImageData(image, 0, 0);
+  return canvas;
+}
+
+/**
+ * Контурные линии. В рисованной подаче форму держит не затенение, а линия:
+ * силуэт, проёмы дверей, арки, стык капота.
+ *
+ * Линии ищутся по разрыву глубины, а не по излому нормали. Нормали
+ * у децимированной сетки ломаются на каждом треугольнике, и контур выходит
+ * проволочной сеткой. Глубина же непрерывна по всей гладкой панели и рвётся
+ * ровно там, где одна деталь заходит за другую: щель двери, кромка арки,
+ * стык капота. Именно там рисовальщик и провёл бы карандашом.
+ *
+ * mask даёт силуэт: у карты глубины альфа занята упаковкой числа, поэтому
+ * непрозрачность берётся с отдельного прохода.
+ */
+function findEdges(mask, depths, width, height, opts) {
+  const out = new Uint8ClampedArray(width * height * 4);
+
+  // Глубина распаковывается один раз в метры: делить четыре байта на каждый
+  // из четырёх соседей у десяти миллионов пикселей — минуты работы впустую.
+  const size = width * height;
+  const z = new Float32Array(size);
+  const solid = new Uint8Array(size);
+  for (let p = 0; p < size; p++) {
+    const i = p * 4;
+    solid[p] = mask[i + 3] > 8 ? 1 : 0;
+    z[p] = (depths[i] / 255 + depths[i + 1] / 65025 + depths[i + 2] / 16581375) * opts.range;
+  }
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const p = y * width + x;
+      if (!solid[p]) continue;
+
+      const l = p - 1, r = p + 1, u = p - width, d = p + width;
+
+      // Силуэт: край непрозрачного пятна.
+      let strength;
+      if (!solid[l] || !solid[r] || !solid[u] || !solid[d]) {
+        strength = 1;
+      } else {
+        const gap = Math.max(Math.abs(z[l] - z[r]), Math.abs(z[u] - z[d]));
+        strength = Math.min(1, Math.max(0, (gap - opts.gap) / opts.gap) * opts.gain);
+      }
+
+      if (strength <= 0.02) continue;
+      const i = p * 4;
+      out[i] = opts.tint[0];
+      out[i + 1] = opts.tint[1];
+      out[i + 2] = opts.tint[2];
+      out[i + 3] = Math.round(255 * strength * opts.alpha);
+    }
+  }
+  return new ImageData(out, width, height);
+}
+
 /** Габарит непрозрачного в кадре. */
 function bounds(pixels) {
   let x0 = W, x1 = -1, y0 = H, y1 = -1;
@@ -276,7 +411,8 @@ async function renderCar(root) {
   // спрайты разных машин нельзя сравнить между собой.
   const half = CONFIG.camera.ortho_scale / 2;
   const dist = length * 4;
-  camera = new OrthographicCamera(-half, half, half * H / W, -half * H / W, 0.01, dist * 4);
+  const depthRange = dist * 4;
+  camera = new OrthographicCamera(-half, half, half * H / W, -half * H / W, 0.01, depthRange);
   // Нос модели смотрит в +X, значит камера встаёт на +Z: тогда на экране
   // машина едет вправо, как и рисовалась вектором.
   camera.position.set(centre.x, centre.y, centre.z + dist);
@@ -302,12 +438,16 @@ async function renderCar(root) {
   // Значение линейное, как Base Color в Blender, а не как код цвета в вёрстке.
   grey.color.setRGB(ALBEDO, ALBEDO, ALBEDO, LinearSRGBColorSpace);
   // Блики снимаются на чёрном: в кадр попадает только то, что даёт лак.
-  // Лак нарочно матовее настоящего: острый блик обводит каждую складку
-  // децимированной геометрии и превращает её в царапину.
+  // В рисованной подаче это не блик лака, а светлое пятно на верхних
+  // плоскостях — поэтому размывается сильнее всего и кладётся одной ступенью.
   const gloss = new MeshPhysicalMaterial({
     color: 0x000000, roughness: Math.max(0.45, ROUGHNESS + 0.1), metalness: 0.0,
     clearcoat: 0.35, clearcoatRoughness: 0.45,
   });
+  const normalMat = new MeshNormalMaterial();
+  const depthMat = new MeshDepthMaterial({ depthPacking: RGBADepthPacking });
+  const maskBuf = new Uint8Array(RAW_W * RAW_H * 4);
+  const depthBuf = new Uint8Array(RAW_W * RAW_H * 4);
   const original = new Map();
   for (const list of Object.values(groups)) {
     for (const node of list) original.set(node, node.material);
@@ -316,27 +456,101 @@ async function renderCar(root) {
   const out = {};
 
   const swap = (list, material) => { for (const node of list) node.material = material; };
+  const swapAll = (material) => {
+    for (const list of Object.values(groups)) swap(list, material);
+  };
+  const restoreAll = () => {
+    for (const [node, material] of original) node.material = material;
+  };
+
+  /** Копия текущего кадра отдельной канвой: её потом мнут заливками. */
+  const grab = () => {
+    const copy = document.createElement('canvas');
+    copy.width = W; copy.height = H;
+    copy.getContext('2d').drawImage(readback, 0, 0);
+    return copy;
+  };
+
+  const STYLE = CONFIG.style ?? {};
+  // Размытие задаётся в долях ширины кадра, чтобы не зависеть от разрешения.
+  const px = (share) => share * W;
+
+  /**
+   * Контурный слой: силуэт, проёмы, арки, стык капота. Снимается по нормалям
+   * и глубине сразу для кузова, стёкол и фонарей — они на канве неподвижны
+   * и лежат одним куском. Колесо крутится, поэтому его контур запекается
+   * в само колесо.
+   */
+  const edgesOf = (names) => {
+    show(names);
+    // Нормали нужны только ради силуэта: у карты глубины альфа занята
+    // упаковкой числа и непрозрачности не показывает.
+    swapAll(normalMat);
+    const mask = shootRaw(maskBuf);
+    swapAll(depthMat);
+    const depths = shootRaw(depthBuf);
+    restoreAll();
+
+    const lines = findEdges(mask, depths, RAW_W, RAW_H, {
+      range: depthRange,
+      gap: STYLE.edge_gap ?? 0.012,
+      gain: STYLE.edge_gain ?? 1.0,
+      alpha: STYLE.edge_alpha ?? 0.6,
+      tint: STYLE.edge_tint ?? [18, 20, 22],
+    });
+
+    // Линия считается крупно и ужимается: посчитанная сразу в кадре, она рваная.
+    const big = document.createElement('canvas');
+    big.width = RAW_W; big.height = RAW_H;
+    big.getContext('2d').putImageData(lines, 0, 0);
+    const small = document.createElement('canvas');
+    small.width = W; small.height = H;
+    const sctx = small.getContext('2d');
+    sctx.imageSmoothingQuality = 'high';
+    // Буфер видеопамяти читается снизу вверх — переворачиваем обратно.
+    sctx.translate(0, H);
+    sctx.scale(1, -1);
+    sctx.drawImage(big, 0, 0, W, H);
+    return small;
+  };
 
   show(['body']);
   swap(groups.body, grey);
   const body = shoot();
-  out.body = body.png;
+  const bodyCanvas = flatten(grab(), {
+    blur: px(STYLE.body_blur ?? 0.010),
+    levels: STYLE.body_levels ?? [0.45, 0.72, 0.95],
+  });
+  out.body = bodyCanvas.toDataURL('image/png');
 
   swap(groups.body, gloss);
-  out.shade = shoot().png;
+  shoot();
+  out.shade = flatten(grab(), {
+    blur: px(STYLE.gloss_blur ?? 0.016),
+    levels: STYLE.gloss_levels ?? [0.0, 0.85],
+  }).toDataURL('image/png');
   swap(groups.body, original.get(groups.body[0]));
 
   show(['glass']);
-  out.glass = shoot().png;
+  shoot();
+  out.glass = flatten(grab(), { blur: px(0.008), levels: [0.16, 0.34] }).toDataURL('image/png');
 
   show(['light']);
-  out.light = shoot().png;
+  shoot();
+  out.light = flatten(grab(), { blur: px(0.005), levels: [0.6, 0.95] }).toDataURL('image/png');
 
   show(['tail']);
-  out.tail = shoot().png;
+  shoot();
+  out.tail = flatten(grab(), { blur: px(0.005), levels: [0.6, 0.95] }).toDataURL('image/png');
+
+  out.edge = edgesOf(['body', 'glass', 'light', 'tail']).toDataURL('image/png');
 
   show(['wheel']);
   const wheels = shoot();
+  // Колесо остаётся тёмным: резина не бликует, и вытягивать её незачем.
+  const wheelCanvas = flatten(grab(), { blur: px(0.0015), levels: [0.10, 0.24, 0.50] });
+  // Контур колеса запекается в него же: колесо крутится отдельным спрайтом.
+  wheelCanvas.getContext('2d').drawImage(edgesOf(['wheel']), 0, 0);
 
   const bodyBox = bounds(body.pixels);
   const wheelBox = bounds(wheels.pixels);
@@ -363,7 +577,7 @@ async function renderCar(root) {
 
   // Спрайт колеса — квадрат вокруг переднего: сцена крутит его вокруг центра.
   const front = circles[1];
-  out.wheel = await crop(wheels.png, {
+  out.wheel = await crop(wheelCanvas.toDataURL('image/png'), {
     x0: front.cx - front.r, x1: front.cx + front.r,
     y0: front.cy - front.r, y1: front.cy + front.r,
   });
@@ -503,7 +717,7 @@ if (carId) {
     ...result.meta,
     // Порядок наложения. Колесо в списке не участвует: сцена рисует его
     // отдельно и с поворотом.
-    order: ['body', 'shade', 'glass', 'light', 'tail'],
+    order: ['body', 'shade', 'glass', 'light', 'tail', 'edge'],
   };
   writeFileSync(`${outDir}/layers.json`, JSON.stringify(manifest, null, 2));
   console.log(`  ${outDir}/layers.json`);

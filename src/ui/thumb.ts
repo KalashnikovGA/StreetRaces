@@ -5,7 +5,7 @@
  * везде была одним объектом. Клетка просто рисует его мелко.
  */
 
-import { CAR_MAX_WIDTH, drawCar } from '../render/car.ts';
+import { drawCar } from '../render/car.ts';
 import { PAINTS } from '../render/palette.ts';
 import { loadCarSprites } from '../render/sprites.ts';
 
@@ -25,7 +25,7 @@ export function drawThumb(canvas: HTMLCanvasElement, modelId: string, paint: str
 
     // Габарит машины — ширина на 0.42 высоты. Вписываем по обеим сторонам:
     // раньше считалось только по ширине, и в низкой клетке машина обрезалась.
-    const width = Math.min(rect.width * 0.94, (rect.height * 0.92) / 0.42, CAR_MAX_WIDTH);
+    const width = Math.min(rect.width * 0.94, (rect.height * 0.92) / 0.42);
     const height = width * 0.42;
     ctx.save();
     ctx.translate((rect.width - width) / 2, rect.height - height * 0.99);

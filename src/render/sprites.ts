@@ -9,7 +9,7 @@
  * вектором, а как приехали — подменяется. Заезд из-за этого не ждёт сети.
  */
 
-export type CarLayer = 'body' | 'shade' | 'glass' | 'light' | 'tail' | 'wheel';
+export type CarLayer = 'body' | 'shade' | 'glass' | 'light' | 'tail' | 'edge' | 'wheel';
 
 export interface WheelAnchor {
   cx: number;
@@ -32,7 +32,7 @@ export interface CarSprites {
   images: Record<CarLayer, HTMLImageElement>;
 }
 
-const LAYERS: CarLayer[] = ['body', 'shade', 'glass', 'light', 'tail', 'wheel'];
+const LAYERS: CarLayer[] = ['body', 'shade', 'glass', 'light', 'tail', 'edge', 'wheel'];
 
 /**
  * Машины, прошедшие пайплайн. Это ровно те, что есть в игре: без спрайтов
