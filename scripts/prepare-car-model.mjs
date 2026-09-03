@@ -94,7 +94,7 @@ const GROUPS = [
   // Пластик бывает и крылом: у Evo широкие панели пластиковые, но крашеные.
   // В trim идёт только заведомо нецветное — чёрное, решётки, зеркала, хром.
   ['trim', /grille|grill|mirror|exhaust|carbon|rubber|vent|molding|moulding|_black|\\bblack|\\btrim/i],
-  ['body', /paint|body|chassis|plastic|coloured|colored|base|kit|panel|material/i],
+  ['body', /paint|coat|body|chassis|plastic|coloured|colored|base|kit|panel|material/i],
 ];
 
 const LENGTH_M = 4.6;

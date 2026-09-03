@@ -37,12 +37,8 @@ const START_PURSE: Purse = { coins: 148_200, gold: 36 };
 
 const START_OWNED: Owned[] = [
   {
-    car: { modelId: 'vogel190', specs: { tires: 6, ignition: 5, clutch: 5, suspension: 6, boost: 4, intake: 5, radiator: 4 } },
-    paint: 'green', plate: 'К 348 ЕЕ', wins: 47, losses: 19,
-  },
-  {
-    car: { modelId: 'bavar_c40', specs: { tires: 5, ignition: 4, clutch: 4, suspension: 5, boost: 3, intake: 4, radiator: 5 } },
-    paint: 'red', plate: 'М 040 УС', wins: 12, losses: 14,
+    car: { modelId: 'falke_t9', specs: { tires: 6, ignition: 5, clutch: 5, suspension: 6, boost: 4, intake: 5, radiator: 4 } },
+    paint: 'white', plate: 'К 348 ЕЕ', wins: 47, losses: 19,
   },
 ];
 

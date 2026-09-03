@@ -44,7 +44,7 @@ const LAYERS: CarLayer[] = [
  * Векторная отрисовка осталась запасным путём на те секунды, пока картинки
  * ещё грузятся.
  */
-export const SPRITE_READY = new Set(['vogel190', 'bavar_c40']);
+export const SPRITE_READY = new Set(['falke_t9']);
 
 const cars = new Map<string, CarSprites | null>();
 const pending = new Map<string, Promise<CarSprites | null>>();

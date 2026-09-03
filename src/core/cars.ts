@@ -52,8 +52,7 @@ export const HP_PER_STRENGTH = 1.85;
  * из которой отрендерены спрайты, — §11 не допускает плейсхолдеров в витрине.
  */
 export const CAR_MODELS: CarModel[] = [
-  { id: 'vogel190', name: '«Vogel 190»',    nick: 'Малыш',    klass: 'A', baseStrength: 254, silhouette: 'седан 80-х с широкими арками', priceCoins: 380_000 },
-  { id: 'bavar_c40', name: '«Bavar C40»',   nick: 'Эмка',     klass: 'A', baseStrength: 276, silhouette: 'купе конца 2010-х', priceCoins: 470_000 },
+  { id: 'falke_t9', name: '«Falke T9»',     nick: 'Жаба',     klass: 'A', baseStrength: 268, silhouette: 'заднемоторное купе 70-х с широкими арками', priceCoins: 430_000 },
 ];
 
 /**
@@ -71,6 +70,8 @@ export const CAR_MODELS: CarModel[] = [
  */
 export const LADDER_MODELS: CarModel[] = [
   { id: 'zarya965',  name: '«Заря-965»',     nick: 'Корытце',  klass: 'D', baseStrength: 100, silhouette: 'ЗАЗ-965',        priceCoins: 0 },
+  { id: 'vogel190',  name: '«Vogel 190»',    nick: 'Малыш',    klass: 'A', baseStrength: 254, silhouette: 'седан 80-х',     priceCoins: 380_000 },
+  { id: 'bavar_c40', name: '«Bavar C40»',    nick: 'Эмка',     klass: 'A', baseStrength: 276, silhouette: 'купе 2010-х',    priceCoins: 470_000 },
   { id: 'lada6',     name: '«Лада-Шесть»',   nick: 'Шоха',     klass: 'D', baseStrength: 108, silhouette: 'ВАЗ-2106',       priceCoins: 4_000 },
   { id: 'ronin_gx',  name: '«Ronin GX»',     nick: 'Японец',   klass: 'C', baseStrength: 135, silhouette: 'Honda Civic 90-х', priceCoins: 22_000 },
   { id: 'lada_sport',name: '«Лада-Спорт»',   nick: 'Четырка',  klass: 'C', baseStrength: 142, silhouette: 'ВАЗ-2114',       priceCoins: 28_000 },
@@ -95,7 +96,7 @@ export const ALL_MODELS: CarModel[] = [...LADDER_MODELS, ...CAR_MODELS]
  */
 export const REPLAY_ORDER: readonly string[] = [
   'zarya965', 'lada6', 'ronin_gx', 'lada_sport', 'bavar320',
-  'ronin_ss', 'kaiser_r34', 'corsa_f40', 'vogel190', 'bavar_c40',
+  'ronin_ss', 'kaiser_r34', 'corsa_f40', 'vogel190', 'bavar_c40', 'falke_t9',
 ];
 
 const MODELS_BY_ID = new Map(ALL_MODELS.map((m) => [m.id, m]));
