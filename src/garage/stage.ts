@@ -33,7 +33,7 @@ export interface StageOptions {
  * Сколько ширины бокса занимает машина. В «Уличных гонках» витрина была
  * крупной: машина почти во весь бокс, а не фигурка посреди пустого гаража.
  */
-const CAR_SHARE = 0.92;
+const CAR_SHARE = 0.99;
 /** Линия пола в долях высоты. */
 const FLOOR = 0.86;
 /** Где стена встречается с полом. */
@@ -139,7 +139,7 @@ export class Stage {
 
     if (!this.modelId) return;
 
-    const carWidth = Math.min(w * CAR_SHARE, (h * 0.62) / 0.42);
+    const carWidth = Math.min(w * CAR_SHARE, (h * 0.86) / 0.42);
     const carHeight = carWidth * 0.42;
 
     // Витрина — фиксированный ракурс три четверти, статичная съёмка. Машина

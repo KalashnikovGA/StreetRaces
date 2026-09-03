@@ -20,6 +20,14 @@ const TABS: { id: Exclude<Tab, 'none'>; label: string; href: string }[] = [
   { id: 'pimp', label: 'Pimp', href: '/pimp.html' },
 ];
 
+/**
+ * Вкладки, закрытые на переделку. Пока витрина в гараже доводится до вида,
+ * который нас устроит, заезд показывать нечем: он рисуется теми же спрайтами,
+ * и правки в них ломали бы трассу на каждом шаге. Вкладка остаётся на месте,
+ * но никуда не ведёт — порядок вкладок из оригинала не переставляется (§9).
+ */
+const LOCKED = new Set<Tab>(['race']);
+
 declare global {
   interface Window {
     /** Карта «вкладка → адрес». Заполняется только самодостаточной раздачей,
@@ -45,7 +53,11 @@ export function mountChrome(active: Tab, options: { withPurse?: boolean } = {}):
     link.textContent = tab.label;
     if (tab.id === active) link.setAttribute('aria-current', 'page');
 
-    if (!map) {
+    if (LOCKED.has(tab.id)) {
+      // Закрыта на переделку: вкладка видна, но не кликается.
+      link.setAttribute('aria-disabled', 'true');
+      link.title = 'Вкладка на переделке';
+    } else if (!map) {
       link.href = href(tab.href);
     } else if (map[tab.id]) {
       // В раздаче по ссылкам вкладки ведут на соседние страницы.

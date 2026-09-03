@@ -296,13 +296,72 @@ function cullMiddle(geometry, alongX, middle, span, minOffset) {
   return out;
 }
 
+/**
+ * Занять решётку треугольниками: ключ ячейки -> есть/нет. Нужно, чтобы
+ * спросить «а лежит ли этот треугольник там же, где лампа».
+ */
+function occupy(list, cell) {
+  const cells = new Set();
+  for (const geometry of list) {
+    const pos = geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      const gx = Math.floor(pos.getX(i) / cell);
+      const gy = Math.floor(pos.getY(i) / cell);
+      const gz = Math.floor(pos.getZ(i) / cell);
+      // Ячейка и её соседи: окантовка блока лежит впритык к стеклу,
+      // но своих вершин с ним не делит.
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            cells.add((gx + dx) + ',' + (gy + dy) + ',' + (gz + dz));
+          }
+        }
+      }
+    }
+  }
+  return cells;
+}
+
+/**
+ * Разделить треугольники по тому, попадает ли центр в занятые ячейки.
+ * Возвращает { inside, outside }; пустая половина приходит как null.
+ */
+function splitByCells(geometry, cells, cell) {
+  const pos = geometry.getAttribute('position');
+  const nor = geometry.getAttribute('normal');
+  const halves = [[[], []], [[], []]];
+  for (let i = 0; i < pos.count; i += 3) {
+    const cx = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3;
+    const cy = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
+    const cz = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+    const key = Math.floor(cx / cell) + ',' + Math.floor(cy / cell) + ',' + Math.floor(cz / cell);
+    const [verts, norms] = halves[cells.has(key) ? 0 : 1];
+    for (let k = 0; k < 3; k++) {
+      verts.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
+      if (nor) norms.push(nor.getX(i + k), nor.getY(i + k), nor.getZ(i + k));
+    }
+  }
+  const build = ([verts, norms]) => {
+    if (verts.length === 0) return null;
+    const out = new BufferGeometry();
+    out.setAttribute('position', new Float32BufferAttribute(verts, 3));
+    if (norms.length) out.setAttribute('normal', new Float32BufferAttribute(norms, 3));
+    out.computeBoundingBox();
+    return out;
+  };
+  return { inside: build(halves[0]), outside: build(halves[1]) };
+}
+
 const LOOK = {
   body: { color: 0xffffff, roughness: 0.42, metalness: 0.15 },
   trim: { color: 0x24262a, roughness: 0.62, metalness: 0.0 },
-  chrome: { color: 0xd6dae0, roughness: 0.18, metalness: 0.9 },
+  // Металл без карты окружения отражать нечего: при metalness под единицу
+  // хром и диск выходят чёрными пятнами. Держим металличность низкой,
+  // а светлоту берём базовым цветом — иначе деталей колеса просто не видно.
+  chrome: { color: 0xc8ccd2, roughness: 0.22, metalness: 0.35 },
   glass: { color: 0x20262b, roughness: 0.15, metalness: 0, transparent: true, opacity: 0.55 },
   tyre: { color: 0x141618, roughness: 0.85, metalness: 0 },
-  rim: { color: 0x9aa0a8, roughness: 0.35, metalness: 0.7 },
+  rim: { color: 0xb4b9c0, roughness: 0.4, metalness: 0.2 },
   wheel: { color: 0x1a1c1e, roughness: 0.55, metalness: 0 },
   light: { color: 0xf0dcc0, roughness: 0.25, metalness: 0 },
   tail: { color: 0xc04a35, roughness: 0.3, metalness: 0 },
@@ -429,6 +488,35 @@ new GLTFLoader().load('/car.glb', (gltf) => {
       }
     }
     buckets.set('trim', keep);
+  }
+
+  /**
+   * Отражатель фары — не хром, а внутренность блока.
+   *
+   * У сборок весь хром сидит в одном материале: молдинги, зеркало, патрубки
+   * выпуска и заодно чаша отражателя внутри фары. Строго сбоку стекло фары
+   * стоит к камере ребром, и в проём крыла видно эту чашу — светлым клином
+   * с острым концом, воткнутым в переднюю часть. На фотографии машины сбоку
+   * такого клина нет: там фара читается узкой полосой стекла на крыле.
+   *
+   * Поэтому весь хром, лежащий в тех же ячейках решётки, что и стекло
+   * лампы, уезжает в кузов: место фары становится продолжением крыла,
+   * а от самой фары остаётся её стекло — ровно то, что видно сбоку.
+   */
+  {
+    const lampCell = Math.max(rawSize.x, rawSize.z) * 0.012;
+    const lamps = [...(buckets.get('light') ?? []), ...(buckets.get('tail') ?? [])];
+    const chrome = buckets.get('chrome');
+    if (lamps.length && chrome?.length && buckets.get('body')) {
+      const cells = occupy(lamps, lampCell);
+      const keep = [];
+      for (const geometry of chrome) {
+        const { inside, outside } = splitByCells(geometry, cells, lampCell);
+        if (inside) buckets.get('body').push(inside);
+        if (outside) keep.push(outside);
+      }
+      buckets.set('chrome', keep);
+    }
   }
 
   /**

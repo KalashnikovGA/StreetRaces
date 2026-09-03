@@ -1,6 +1,6 @@
 /* Гараж. Порядок и плотность блоков — из макета, отделка — по CLAUDE.md. */
 
-#scene { display: block; width: 100%; height: 340px; }
+#scene { display: block; width: 100%; height: 420px; }
 
 /* Ряд запчастей: уровень цифрой, без полосок и без иконок. */
 .parts { grid-template-columns: repeat(7, 1fr); }

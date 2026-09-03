@@ -527,7 +527,11 @@ async function renderCar(root) {
 
   show(['light']);
   shoot();
-  out.light = flatten(grab(), { blur: px(0.0008), levels: null }).toDataURL('image/png');
+  // Фара размывается сильнее прочих деталей. Строго сбоку стекло стоит
+  // к камере ребром: на кадре от него остаётся узкая полоса, сходящая
+  // на нет острым концом. Резкий край такой полосы читается не фарой,
+  // а клином, воткнутым в крыло, — половина пикселя размытия его скругляет.
+  out.light = flatten(grab(), { blur: px(0.0018), levels: null }).toDataURL('image/png');
 
   show(['tail']);
   shoot();
