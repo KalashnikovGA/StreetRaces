@@ -15,7 +15,7 @@
  */
 
 import { PALETTE, PAINTS } from './palette.ts';
-import { carSprites, tintedBody, type CarSprites } from './sprites.ts';
+import { carSprites, tintedBody, type CarSprites, type CarView } from './sprites.ts';
 
 /** Силуэт в долях габаритного прямоугольника. Те же якоря, что у художника (§11). */
 export interface Silhouette {
@@ -91,6 +91,8 @@ export interface DrawCarOptions {
   squat: number;
   /** Мигает ли стоп-сигнал (финиш). */
   braking?: boolean;
+  /** Ракурс: заезд — строго сбоку, гараж — три четверти. */
+  view?: CarView;
 }
 
 function path(ctx: CanvasRenderingContext2D, points: [number, number][], w: number, h: number, closed = true): void {
@@ -172,6 +174,10 @@ function drawSpriteCar(
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
 
+  // В три четверти колёса запечены в кадр и лежат в общем стеке: витрина —
+  // статичная картинка, крутить нечего. В профиле их рисует сцена отдельно.
+  if (meta.wheels.length === 0) ctx.drawImage(images.wheel, dx, dy, frameW, frameH);
+
   // Детали со своим цветом: чёрные окантовки, решётки, зеркало, бампера —
   // и хром поверх них. Красится только кузов, поэтому они не уплывают
   // вслед за окраской.
@@ -209,7 +215,7 @@ function drawSpriteCar(
  * Вызывающий сам ставит трансформацию.
  */
 export function drawCar(ctx: CanvasRenderingContext2D, options: DrawCarOptions): void {
-  const sprites = carSprites(options.modelId);
+  const sprites = carSprites(options.modelId, options.view ?? 'race');
   if (sprites) {
     drawSpriteCar(ctx, sprites, options);
     return;

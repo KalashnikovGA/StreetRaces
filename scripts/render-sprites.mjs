@@ -1,7 +1,7 @@
 /**
  * Рендер слоёных 2D-спрайтов. Шаг 8 из §14.
  *
- *   node scripts/render-sprites.mjs --car <id>
+ *   node scripts/render-sprites.mjs --car <id> [--view race|garage]
  *   node scripts/render-sprites.mjs --scene wall|road --from <файл.glb>
  *
  * Машина берётся из assets/models/<id>.glb — это подготовленная модель,
@@ -41,6 +41,8 @@ const flag = (name) => {
 };
 
 const carId = flag('car');
+/** Ракурс: race — строго сбоку, garage — три четверти. */
+const view = flag('view') ?? 'race';
 const sceneName = flag('scene');
 const from = flag('from');
 
@@ -57,7 +59,9 @@ if (!source || !existsSync(source)) {
   process.exit(1);
 }
 
-const outDir = carId ? `public/sprites/${carId}` : 'public/sprites/scene';
+const outDir = carId
+  ? (view === 'race' ? `public/sprites/${carId}` : `public/sprites/${carId}/${view}`)
+  : 'public/sprites/scene';
 mkdirSync(outDir, { recursive: true });
 
 // ── страница ─────────────────────────────────────────────────────────────────
@@ -75,7 +79,7 @@ const PAGE = `<!doctype html>
 import {
   AgXToneMapping, AmbientLight, Box3, HemisphereLight, LinearSRGBColorSpace, Mesh,
   MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, NoToneMapping,
-  OrthographicCamera, RectAreaLight, Scene, SRGBColorSpace, Vector3,
+  OrthographicCamera, PerspectiveCamera, RectAreaLight, Scene, SRGBColorSpace, Vector3,
   WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -89,6 +93,7 @@ const CONFIG = JSON.parse(document.getElementById('config').textContent);
  * ширину экрана, и им кадр машины мелковат.
  */
 const FRAME = Number(new URLSearchParams(location.search).get('frame')) || 1;
+const VIEW = new URLSearchParams(location.search).get('view') || 'race';
 const W = Math.round(CONFIG.render.resolution_x * FRAME);
 const H = Math.round(CONFIG.render.resolution_y * FRAME);
 
@@ -359,19 +364,45 @@ async function renderCar(root) {
   const half = CONFIG.camera.ortho_scale / 2;
   const dist = length * 4;
   // Ближняя и дальняя плоскости обжимают машину вплотную. Диапазон в десятки
-  // метров на объект в один метр съедает точность буфера глубины, и две почти
-  // совпадающие поверхности — обвес поверх стокового кузова — начинают спорить
-  // за пиксель. На рендере это тёмные пятна по двери и крылу.
-  const margin = Math.max(size.y, size.z) * 0.6 + 0.2;
-  camera = new OrthographicCamera(
-    -half, half, half * H / W, -half * H / W,
-    dist - margin, dist + margin,
-  );
-  // Нос модели смотрит в +X, значит камера встаёт на +Z: тогда на экране
-  // машина едет вправо, как и рисовалась вектором.
-  camera.position.set(centre.x, centre.y, centre.z + dist);
-  camera.up.set(0, 1, 0);
-  camera.lookAt(centre.x, centre.y, centre.z);
+  // метров на объект в один метр съедает точность буфера глубины.
+  const margin = Math.max(size.x, size.y, size.z) * 0.9 + 0.3;
+
+  if (VIEW === 'garage') {
+    /**
+     * Три четверти для витрины — как в первой браузерной игре: машина
+     * довёрнута к камере, камера чуть выше линии капота, ракурс
+     * зафиксирован раз и навсегда. Перспектива длиннофокусная: так снимают
+     * машину в каталоге, у широкого угла разъезжаются края.
+     *
+     * Доворачивается сама машина, а не камера: тогда риг из трёх ламп
+     * остаётся на месте и свет во всех ракурсах один.
+     */
+    const spec = CONFIG.views?.garage ?? {};
+    const fov = spec.fov_deg ?? 16;
+    const reach = (CONFIG.camera.ortho_scale / 2) / Math.tan((fov / 2) * Math.PI / 180);
+    root.rotation.y = -(spec.yaw_deg ?? 34) * Math.PI / 180;
+    root.updateWorldMatrix(true, true);
+
+    const pitch = (spec.pitch_deg ?? 11) * Math.PI / 180;
+    camera = new PerspectiveCamera(fov, W / H, Math.max(0.05, reach - margin), reach + margin);
+    camera.position.set(
+      centre.x,
+      centre.y + Math.sin(pitch) * reach,
+      centre.z + Math.cos(pitch) * reach,
+    );
+    camera.up.set(0, 1, 0);
+    camera.lookAt(centre.x, centre.y, centre.z);
+  } else {
+    camera = new OrthographicCamera(
+      -half, half, half * H / W, -half * H / W,
+      dist - margin, dist + margin,
+    );
+    // Нос модели смотрит в +X, значит камера встаёт на +Z: тогда на экране
+    // машина едет вправо, как и рисовалась вектором.
+    camera.position.set(centre.x, centre.y, centre.z + dist);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(centre.x, centre.y, centre.z);
+  }
 
   const original = new Map();
   for (const list of Object.values(groups)) {
@@ -537,6 +568,23 @@ async function renderCar(root) {
 
   // Спрайт колеса — квадрат вокруг переднего: сцена крутит его вокруг центра.
   const front = circles[1];
+  if (VIEW !== 'race') {
+    // В три четверти колесо не крутится: витрина — статичная картинка,
+    // как и в первой браузерной игре. Кладём его целым кадром, в общий стек.
+    out.wheel = wheelCanvas.toDataURL('image/png');
+    window.done = {
+      images: out,
+      meta: {
+        frame: [W, H],
+        box: bodyBox,
+        ground: Math.max(bodyBox.y1, bounds(wheels.pixels).y1),
+        wheels: [],
+        length_m: CONFIG.car_length_m,
+      },
+    };
+    return;
+  }
+
   out.wheel = await crop(wheelCanvas.toDataURL('image/png'), {
     x0: front.cx - front.r, x1: front.cx + front.r,
     y0: front.cy - front.r, y1: front.cy + front.r,
@@ -651,7 +699,7 @@ const axis = sceneName === 'road' ? 'y' : 'z';
 // Декорации тайлятся во всю ширину экрана, поэтому снимаются кадром втрое
 // крупнее машинного. Машинам кадр менять нельзя — см. «незыблемое правило».
 const frame = mode === 'car' ? 1 : 2;
-await page.goto(`http://localhost:${port}/?mode=${mode}&axis=${axis}&frame=${frame}`);
+await page.goto(`http://localhost:${port}/?mode=${mode}&axis=${axis}&frame=${frame}&view=${view}`);
 await page.waitForFunction(() => window.done !== null, null, { timeout: 300_000 });
 const result = await page.evaluate(() => window.done);
 await browser.close();
@@ -675,13 +723,17 @@ if (carId) {
   const manifest = {
     id: carId,
     ...result.meta,
-    // Порядок наложения. Колесо в списке не участвует: сцена рисует его
-    // отдельно и с поворотом.
-    order: ['body', 'shade', 'trim', 'chrome', 'glass', 'light', 'tail'],
+    // Порядок наложения. В профиле колесо в список не входит: сцена рисует
+    // его отдельно и с поворотом. В три четверти оно лежит в общем стеке.
+    order: view === 'race'
+      ? ['body', 'shade', 'trim', 'chrome', 'glass', 'light', 'tail']
+      : ['body', 'shade', 'wheel', 'trim', 'chrome', 'glass', 'light', 'tail'],
   };
   writeFileSync(`${outDir}/layers.json`, JSON.stringify(manifest, null, 2));
   console.log(`  ${outDir}/layers.json`);
-  console.log(`колёса: ${manifest.wheels.map((w) => `${w.cx},${w.cy} r${w.r}`).join('  ')}  земля ${manifest.ground}`);
+  console.log(manifest.wheels.length
+    ? `колёса: ${manifest.wheels.map((w) => `${w.cx},${w.cy} r${w.r}`).join('  ')}  земля ${manifest.ground}`
+    : `ракурс ${view}, колёса в кадре, земля ${manifest.ground}`);
 }
 
 console.log(`итого ${(total / 1024).toFixed(0)} КБ`);

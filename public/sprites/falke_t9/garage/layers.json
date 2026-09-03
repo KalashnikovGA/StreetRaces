@@ -1,0 +1,26 @@
+{
+  "id": "falke_t9",
+  "frame": [
+    1536,
+    768
+  ],
+  "box": {
+    "x0": 440,
+    "x1": 1118,
+    "y0": 268,
+    "y1": 544
+  },
+  "ground": 559,
+  "wheels": [],
+  "length_m": 4.6,
+  "order": [
+    "body",
+    "shade",
+    "wheel",
+    "trim",
+    "chrome",
+    "glass",
+    "light",
+    "tail"
+  ]
+}

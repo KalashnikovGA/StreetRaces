@@ -268,6 +268,34 @@ function smoothNormals(geometry, weld, iterations) {
  * молдинги, светлый диск на тёмной резине. Свали их в кузов, и от машины
  * останется одно цветное пятно.
  */
+/**
+ * Выбросить треугольники, чьи центры стоят близко к середине машины.
+ * Настоящие колёса живут на осях, у краёв; всё колёсное в середине — запаска.
+ */
+function cullMiddle(geometry, alongX, middle, span, minOffset) {
+  const pos = geometry.getAttribute('position');
+  const nor = geometry.getAttribute('normal');
+  const verts = [];
+  const norms = [];
+  for (let i = 0; i < pos.count; i += 3) {
+    const c = (alongX
+      ? (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2))
+      : (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2))) / 3;
+    if (Math.abs(c - middle) / span <= minOffset) continue;
+    for (let k = 0; k < 3; k++) {
+      verts.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
+      if (nor) norms.push(nor.getX(i + k), nor.getY(i + k), nor.getZ(i + k));
+    }
+  }
+  if (verts.length === 0) return null;
+
+  const out = new BufferGeometry();
+  out.setAttribute('position', new Float32BufferAttribute(verts, 3));
+  if (nor) out.setAttribute('normal', new Float32BufferAttribute(norms, 3));
+  out.computeBoundingBox();
+  return out;
+}
+
 const LOOK = {
   body: { color: 0xffffff, roughness: 0.42, metalness: 0.15 },
   trim: { color: 0x24262a, roughness: 0.62, metalness: 0.0 },
@@ -318,6 +346,61 @@ new GLTFLoader().load('/car.glb', (gltf) => {
     }
   }
   const rawSize = whole.getSize(new Vector3());
+
+  /**
+   * Подставка под машину. Авторы моделей часто кладут под неё плоскую плиту
+   * или диск — сбоку он стоит ребром и не виден, а в три четверти это белый
+   * лист под колёсами. Выбрасываем всё плоское и широкое: у настоящей детали
+   * машины таких пропорций не бывает.
+   */
+  {
+    const flat = (box) => {
+      const s = box.getSize(new Vector3());
+      const footprint = (s.x * s.z) / (rawSize.x * rawSize.z);
+      return s.y < rawSize.y * 0.03 && footprint > 0.45;
+    };
+    for (const [name, list] of buckets) {
+      const keep = list.filter((geometry) => !flat(geometry.boundingBox));
+      if (keep.length !== list.length) dropped += list.length - keep.length;
+      buckets.set(name, keep);
+    }
+  }
+  // Габарит пересчитывается: подставку выбросили, и с ней уехали и размер,
+  // и середина машины — а по ним отбираются запасные колёса.
+  whole.makeEmpty();
+  for (const list of buckets.values()) {
+    for (const geometry of list) {
+      geometry.computeBoundingBox();
+      whole.union(geometry.boundingBox);
+    }
+  }
+  rawSize.copy(whole.getSize(new Vector3()));
+
+  /**
+   * Запасные колёса. В сборках часто лежит несколько вариантов дисков,
+   * сваленных к середине машины: сбоку они прятались за настоящими, а в три
+   * четверти торчат прямо из двери. У машины ровно две оси, поэтому всё
+   * колёсное вне краёв — лишнее.
+   */
+  {
+    const alongX = rawSize.x >= rawSize.z;
+    const span = alongX ? rawSize.x : rawSize.z;
+    const centre = whole.getCenter(new Vector3());
+    const middle = alongX ? centre.x : centre.z;
+    for (const name of ['wheel', 'tyre', 'rim']) {
+      const list = buckets.get(name);
+      if (!list?.length) continue;
+      // Отбираем по треугольникам, а не по мешам: все колёса, включая
+      // запасные, обычно лежат одним мешем, и целиком его не выбросить.
+      const keep = [];
+      for (const geometry of list) {
+        const cut = cullMiddle(geometry, alongX, middle, span, 0.16);
+        if (cut) keep.push(cut); else dropped++;
+      }
+      buckets.set(name, keep);
+    }
+  }
+
   const cellUnits = CELL * (Math.max(rawSize.x, rawSize.z) / LENGTH_M);
 
   /**

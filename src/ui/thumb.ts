@@ -7,7 +7,10 @@
 
 import { drawCar } from '../render/car.ts';
 import { PAINTS } from '../render/palette.ts';
-import { loadCarSprites } from '../render/sprites.ts';
+import { loadCarSprites, type CarView } from '../render/sprites.ts';
+
+/** Тот же ракурс, что и в витрине. */
+const VIEW: CarView = 'race';
 
 export function drawThumb(canvas: HTMLCanvasElement, modelId: string, paint: string): void {
   const render = (): void => {
@@ -35,10 +38,11 @@ export function drawThumb(canvas: HTMLCanvasElement, modelId: string, paint: str
       width,
       wheelAngle: 0,
       squat: 0,
+      view: VIEW,
     });
     ctx.restore();
   };
 
   render();
-  void loadCarSprites(modelId).then(render);
+  void loadCarSprites(modelId, VIEW).then(render);
 }

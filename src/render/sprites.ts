@@ -46,8 +46,22 @@ const LAYERS: CarLayer[] = [
  */
 export const SPRITE_READY = new Set(['falke_t9']);
 
+/**
+ * Ракурс. Как в первой браузерной игре: в гараже машина показана
+ * в фиксированных трёх четвертях, в заезде — строго сбоку. Повернуть камеру
+ * нельзя, это две статичные съёмки одной модели.
+ */
+export type CarView = 'race' | 'garage';
+
 const cars = new Map<string, CarSprites | null>();
 const pending = new Map<string, Promise<CarSprites | null>>();
+
+/** Ключ кэша: у машины два набора спрайтов, по одному на ракурс. */
+const keyOf = (modelId: string, view: CarView) => `${view}/${modelId}`;
+
+/** Путь к папке ракурса: профиль лежит в корне машины, остальные — подпапкой. */
+const dirOf = (modelId: string, view: CarView) =>
+  (view === 'race' ? `/sprites/${modelId}` : `/sprites/${modelId}/${view}`);
 
 declare global {
   interface Window {
@@ -90,34 +104,39 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * Спрайты машины, если они уже загружены. Синхронно — вызывается из кадра
  * отрисовки, где ждать нельзя.
  */
-export function carSprites(modelId: string): CarSprites | null {
-  return cars.get(modelId) ?? null;
+export function carSprites(modelId: string, view: CarView = 'race'): CarSprites | null {
+  return cars.get(keyOf(modelId, view)) ?? null;
 }
 
 /** Есть ли у машины отрендеренные спрайты. Отсутствие — не ошибка (§11, шаг 8). */
-export function loadCarSprites(modelId: string): Promise<CarSprites | null> {
-  const known = pending.get(modelId);
+export function loadCarSprites(
+  modelId: string,
+  view: CarView = 'race',
+): Promise<CarSprites | null> {
+  const key = keyOf(modelId, view);
+  const known = pending.get(key);
   if (known) return known;
 
+  const dir = dirOf(modelId, view);
   const job = (async () => {
     try {
-      const meta = await loadManifest(asset(`/sprites/${modelId}/layers.json`));
+      const meta = await loadManifest(asset(`${dir}/layers.json`));
       const images = Object.fromEntries(
         await Promise.all(
-          LAYERS.map(async (layer) => [layer, await loadImage(asset(`/sprites/${modelId}/${layer}.png`))]),
+          LAYERS.map(async (layer) => [layer, await loadImage(asset(`${dir}/${layer}.png`))]),
         ),
       ) as Record<CarLayer, HTMLImageElement>;
       const sprites: CarSprites = { meta, images };
-      cars.set(modelId, sprites);
+      cars.set(key, sprites);
       return sprites;
     } catch {
       // Машины без спрайтов рисуются вектором — это штатный путь, не сбой.
-      cars.set(modelId, null);
+      cars.set(key, null);
       return null;
     }
   })();
 
-  pending.set(modelId, job);
+  pending.set(key, job);
   return job;
 }
 

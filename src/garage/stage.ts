@@ -11,7 +11,18 @@
 
 import { drawCar } from '../render/car.ts';
 import { PALETTE, PAINTS } from '../render/palette.ts';
-import { loadCarSprites, loadSceneSprites, sceneSprites, tileMirrored } from '../render/sprites.ts';
+import {
+  loadCarSprites, loadSceneSprites, sceneSprites, tileMirrored, type CarView,
+} from '../render/sprites.ts';
+
+/**
+ * Ракурс витрины. Три четверти сняты и лежат в public/sprites/<id>/garage,
+ * но у нынешней модели внутри кузова лежат запасные колёса: сбоку они
+ * прятались за настоящими, а в три четверти торчат из двери. Отбор
+ * по положению задевает и настоящие, поэтому витрина пока показывает
+ * профиль. Переключается одной строкой, как только исходник вычистят.
+ */
+const VIEW: CarView = 'race';
 
 export interface StageOptions {
   canvas: HTMLCanvasElement;
@@ -42,7 +53,6 @@ export class Stage {
   private last = 0;
   /** Секунды с начала заезда машины в бокс. */
   private age = 0;
-  private wheelAngle = 0;
   private reducedMotion = false;
 
   constructor(options: StageOptions) {
@@ -64,8 +74,7 @@ export class Stage {
     this.modelId = modelId;
     this.paint = PAINTS[paint] ?? paint;
     this.age = this.reducedMotion ? ROLL_IN + SETTLE : 0;
-    this.wheelAngle = 0;
-    void loadCarSprites(modelId).then(() => {
+    void loadCarSprites(modelId, VIEW).then(() => {
       this.options.onReady?.();
       this.draw();
     });
@@ -133,11 +142,12 @@ export class Stage {
     const carWidth = Math.min(w * CAR_SHARE, (h * 0.62) / 0.42);
     const carHeight = carWidth * 0.42;
 
-    // Заезд в бокс: машина приходит справа и тормозит по экспоненте.
+    // Витрина — фиксированный ракурс три четверти, статичная съёмка. Машина
+    // не закатывается в бокс: в три четверти это читалось бы как полёт боком.
+    // Вместо заезда — проявление и лёгкая осадка на подвеске.
     const roll = Math.min(1, this.age / ROLL_IN);
     const eased = 1 - Math.pow(1 - roll, 3);
-    const restX = (w - carWidth) / 2;
-    const x = restX + (1 - eased) * (w - restX);
+    const x = (w - carWidth) / 2;
 
     // Оседание на подвеске после остановки. Затухающие колебания, полсекунды.
     const settle = Math.max(0, this.age - ROLL_IN);
@@ -145,18 +155,18 @@ export class Stage {
       ? Math.exp(-4.5 * settle) * Math.sin(settle * 13) * carHeight * 0.035
       : 0;
 
-    if (roll < 1) this.wheelAngle += (1 - eased) * 0.42;
-
-    const y = h * FLOOR - carHeight * 0.92 + bob;
+    const y = h * FLOOR - carHeight * 0.92 + bob + (1 - eased) * carHeight * 0.06;
 
     ctx.save();
+    ctx.globalAlpha = eased;
     ctx.translate(x, y);
     drawCar(ctx, {
       modelId: this.modelId,
       pimp: { paint: this.paint },
       width: carWidth,
-      wheelAngle: this.wheelAngle,
+      wheelAngle: 0,
       squat: 0,
+      view: VIEW,
     });
     ctx.restore();
   }
