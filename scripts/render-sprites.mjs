@@ -301,11 +301,10 @@ function flatten(canvas, { blur, levels }) {
  * непрозрачность берётся с отдельного прохода.
  */
 function findEdges(mask, depths, width, height, opts) {
-  const out = new Uint8ClampedArray(width * height * 4);
+  const size = width * height;
 
   // Глубина распаковывается один раз в метры: делить четыре байта на каждый
   // из четырёх соседей у десяти миллионов пикселей — минуты работы впустую.
-  const size = width * height;
   const z = new Float32Array(size);
   const solid = new Uint8Array(size);
   for (let p = 0; p < size; p++) {
@@ -314,31 +313,103 @@ function findEdges(mask, depths, width, height, opts) {
     z[p] = (depths[i] / 255 + depths[i + 1] / 65025 + depths[i + 2] / 16581375) * opts.range;
   }
 
+  // Две линии разной толщины, как у рисовальщика: силуэт обводится жирнее
+  // внутренних — проёмов, арок, стыка капота.
+  const outline = new Uint8Array(size);
+  const inner = new Uint8Array(size);
+
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const p = y * width + x;
       if (!solid[p]) continue;
-
       const l = p - 1, r = p + 1, u = p - width, d = p + width;
-
-      // Силуэт: край непрозрачного пятна.
-      let strength;
       if (!solid[l] || !solid[r] || !solid[u] || !solid[d]) {
-        strength = 1;
-      } else {
-        const gap = Math.max(Math.abs(z[l] - z[r]), Math.abs(z[u] - z[d]));
-        strength = Math.min(1, Math.max(0, (gap - opts.gap) / opts.gap) * opts.gain);
+        outline[p] = 1;
+        continue;
       }
 
-      if (strength <= 0.02) continue;
-      const i = p * 4;
-      out[i] = opts.tint[0];
-      out[i + 1] = opts.tint[1];
-      out[i + 2] = opts.tint[2];
-      out[i + 3] = Math.round(255 * strength * opts.alpha);
+      // Излом глубины, а не её наклон. У плавно изогнутой панели глубина
+      // меняется быстро, но ровно, и разность соседей ловит её наравне
+      // со щелью двери — линии выходили рваными и лезли на гладкий борт.
+      // Вторая разность на ровном изгибе почти ноль, а на щели, кромке арки
+      // или стыке капота — вся глубина уступа сразу.
+      const bend = Math.abs(z[l] + z[r] - 2 * z[p]) + Math.abs(z[u] + z[d] - 2 * z[p]);
+      if (bend > opts.gap) inner[p] = 1;
     }
   }
+
+  despeckle(inner, width, height);
+  const outlineMask = dilate(outline, width, height, opts.outlineRadius);
+  const innerMask = dilate(inner, width, height, opts.innerRadius);
+
+  const out = new Uint8ClampedArray(size * 4);
+  const outlineAlpha = Math.round(255 * opts.outlineAlpha);
+  const innerAlpha = Math.round(255 * opts.innerAlpha);
+  for (let p = 0; p < size; p++) {
+    const alpha = outlineMask[p] ? outlineAlpha : innerMask[p] ? innerAlpha : 0;
+    if (!alpha) continue;
+    const i = p * 4;
+    out[i] = opts.tint[0];
+    out[i + 1] = opts.tint[1];
+    out[i + 2] = opts.tint[2];
+    out[i + 3] = alpha;
+  }
   return new ImageData(out, width, height);
+}
+
+/**
+ * Одиночные точки — не линия, а крап. Разрыв глубины срабатывает и там, где
+ * поверхность стоит к камере ребром; такие пиксели не складываются в штрих
+ * и после утолщения превращаются в грязь. Оставляем только те, у кого есть
+ * хотя бы два соседа: у настоящей линии они есть всегда.
+ */
+function despeckle(mask, width, height) {
+  const keep = new Uint8Array(mask.length);
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const p = y * width + x;
+      if (!mask[p]) continue;
+      let n = 0;
+      for (const q of [p - 1, p + 1, p - width, p + width,
+                       p - width - 1, p - width + 1, p + width - 1, p + width + 1]) {
+        if (mask[q]) n++;
+      }
+      if (n >= 2) keep[p] = 1;
+    }
+  }
+  mask.set(keep);
+}
+
+/**
+ * Утолщение линии. Без него штрих шириной в один пиксель крупного буфера
+ * после ужатия втрое превращается в треть пикселя — линия и получалась
+ * еле заметной.
+ *
+ * Расширение делается двумя проходами, по строкам и по столбцам: так оно
+ * стоит O(радиус), а не O(радиус в квадрате).
+ */
+function dilate(mask, width, height, radius) {
+  if (radius <= 0) return mask;
+  const pass = (src, dst, stride, outer, inner) => {
+    for (let a = 0; a < outer; a++) {
+      const base = a * (stride === 1 ? width : 1);
+      for (let b = 0; b < inner; b++) {
+        const p = base + b * stride;
+        let on = 0;
+        for (let k = -radius; k <= radius && !on; k++) {
+          const c = b + k;
+          if (c < 0 || c >= inner) continue;
+          if (src[base + c * stride]) on = 1;
+        }
+        dst[p] = on;
+      }
+    }
+  };
+  const rows = new Uint8Array(mask.length);
+  pass(mask, rows, 1, height, width);
+  const out = new Uint8Array(mask.length);
+  pass(rows, out, width, width, height);
+  return out;
 }
 
 /** Габарит непрозрачного в кадре. */
@@ -491,12 +562,16 @@ async function renderCar(root) {
     const depths = shootRaw(depthBuf);
     restoreAll();
 
+    // Толщина задаётся в пикселях кадра и переводится в радиус крупного буфера.
+    const radius = (widthPx) => Math.max(1, Math.round((widthPx * SS) / 2));
     const lines = findEdges(mask, depths, RAW_W, RAW_H, {
       range: depthRange,
-      gap: STYLE.edge_gap ?? 0.012,
-      gain: STYLE.edge_gain ?? 1.0,
-      alpha: STYLE.edge_alpha ?? 0.6,
-      tint: STYLE.edge_tint ?? [18, 20, 22],
+      gap: STYLE.edge_gap ?? 0.008,
+      outlineRadius: radius(STYLE.edge_outline_px ?? 2.4),
+      innerRadius: radius(STYLE.edge_line_px ?? 1.5),
+      outlineAlpha: STYLE.edge_outline_alpha ?? 1.0,
+      innerAlpha: STYLE.edge_alpha ?? 0.85,
+      tint: STYLE.edge_tint ?? [16, 18, 20],
     });
 
     // Линия считается крупно и ужимается: посчитанная сразу в кадре, она рваная.
