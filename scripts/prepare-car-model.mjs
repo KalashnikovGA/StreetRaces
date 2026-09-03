@@ -359,7 +359,10 @@ const LOOK = {
   // хром и диск выходят чёрными пятнами. Держим металличность низкой,
   // а светлоту берём базовым цветом — иначе деталей колеса просто не видно.
   chrome: { color: 0xc8ccd2, roughness: 0.22, metalness: 0.35 },
-  glass: { color: 0x20262b, roughness: 0.15, metalness: 0, transparent: true, opacity: 0.55 },
+  // Стекло непрозрачное. Прозрачность нужна была салону, а салон
+  // из модели выброшен; зато сквозь неё просвечивало зеркало заднего вида —
+  // его стекло сидит в том же материале, и сбоку зеркало выходило призраком.
+  glass: { color: 0x232a30, roughness: 0.14, metalness: 0.05 },
   tyre: { color: 0x141618, roughness: 0.85, metalness: 0 },
   rim: { color: 0xb4b9c0, roughness: 0.4, metalness: 0.2 },
   wheel: { color: 0x1a1c1e, roughness: 0.55, metalness: 0 },

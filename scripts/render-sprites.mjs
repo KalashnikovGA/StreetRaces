@@ -78,9 +78,9 @@ const PAGE = `<!doctype html>
 <script type="module">
 import {
   AgXToneMapping, AmbientLight, Box3, HemisphereLight, LinearSRGBColorSpace, Mesh,
-  MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, NoToneMapping,
-  OrthographicCamera, PerspectiveCamera, RectAreaLight, Scene, SRGBColorSpace, Vector3,
-  WebGLRenderer, WebGLRenderTarget,
+  MeshBasicMaterial, MeshDepthMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
+  NoToneMapping, OrthographicCamera, PerspectiveCamera, RGBADepthPacking, RectAreaLight,
+  Scene, SRGBColorSpace, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
@@ -226,6 +226,96 @@ function shoot() {
  * Тональные полосы three.js (MeshToonMaterial) тут не годятся: они не
  * освещаются площадными лампами, а весь наш риг построен на них.
  */
+/**
+ * Карта затенения в щелях.
+ *
+ * Три площадные лампы освещают машину ровно, и всё, что не поймало блик,
+ * сливается в одну заливку: стык двери, посадка зеркала, кромка порога,
+ * зазор фары. На фотографии их рисует не свет, а его отсутствие — в узкую
+ * щель свет просто не заходит.
+ *
+ * Считается по буферу глубины, без трассировки лучей: пиксель сравнивается
+ * с размытой окрестностью того же буфера. Дальше окрестности — значит,
+ * утоплен, значит, щель.
+ *
+ * Размытие двустороннее: соседи дальше limit_m метров в расчёт не идут.
+ * Без этого весь силуэт машины обводится чёрным — у края поверхность
+ * уходит от камеры круто, и любая окрестность там «ближе». Обводки нам
+ * не нужно: контурный слой мы уже пробовали и от него отказались, здесь
+ * нужна тень в щели, а не линия по краю.
+ *
+ * Возвращает канву с чёрной заливкой и альфой по глубине каверны.
+ */
+function cavityMap(pixels, w, h, { radius, strength, limit, full, floor, range, soften }) {
+  const depth = new Float32Array(w * h);
+  const solid = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    // RGBADepthPacking: четыре байта — одно число с плавающей точкой в [0,1].
+    const r = pixels[i * 4] / 255, g = pixels[i * 4 + 1] / 255;
+    const b = pixels[i * 4 + 2] / 255, a = pixels[i * 4 + 3] / 255;
+    const d = r + g / 255 + b / 65025 + a / 16581375;
+    depth[i] = d;
+    // Фон лежит на дальней плоскости — в расчёт не берём.
+    solid[i] = d < 0.999 ? 1 : 0;
+  }
+
+  // Метры переводим в доли буфера: у ортокамеры глубина линейна, у длинного
+  // фокуса витрины — почти линейна, и на щелях в миллиметры разница не видна.
+  const near = limit / range;
+  const deep = full / range;
+  // Мёртвая зона. Децимация оставляет на крупных панелях рябь в доли
+  // миллиметра; без порога карта каверн честно рисует её разводами,
+  // и крыло выглядит помятым. Стык панели глубже на порядок.
+  const dead = floor / range;
+
+  const blurAxis = (src, dst, dx, dy) => {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const at = y * w + x;
+        if (!solid[at]) { dst[at] = src[at]; continue; }
+        const centre = depth[at];
+        let sum = 0, n = 0;
+        for (let k = -radius; k <= radius; k++) {
+          const sx = x + k * dx, sy = y + k * dy;
+          if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
+          const j = sy * w + sx;
+          if (!solid[j]) continue;
+          if (Math.abs(depth[j] - centre) > near) continue;
+          sum += src[j]; n++;
+        }
+        dst[at] = n ? sum / n : src[at];
+      }
+    }
+  };
+  const tmp = new Float32Array(w * h);
+  const soft = new Float32Array(w * h);
+  blurAxis(depth, tmp, 1, 0);
+  blurAxis(tmp, soft, 0, 1);
+
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  const image = out.getContext('2d').createImageData(w, h);
+  for (let i = 0; i < w * h; i++) {
+    if (!solid[i]) continue;
+    // Утоплен относительно окрестности — щель. Приподнят — ребро, его
+    // не трогаем: подсветка рёбер и есть обводка.
+    const dip = depth[i] - soft[i] - dead;
+    const k = Math.min(1, Math.max(0, dip / (deep - dead)));
+    image.data[i * 4 + 3] = Math.round(255 * k * strength);
+  }
+  out.getContext('2d').putImageData(image, 0, 0);
+  if (soften <= 0) return out;
+
+  // Буфер глубины снимается без сглаживания, иначе упаковка ломается,
+  // — поэтому кромки каверн ступенчатые. Полпикселя размытия их снимает.
+  const smooth = document.createElement('canvas');
+  smooth.width = w; smooth.height = h;
+  const sc = smooth.getContext('2d');
+  sc.filter = 'blur(' + soften.toFixed(2) + 'px)';
+  sc.drawImage(out, 0, 0);
+  return smooth;
+}
+
 function flatten(canvas, { blur, levels }) {
   const w = canvas.width, h = canvas.height;
   const g = canvas.getContext('2d');
@@ -498,14 +588,14 @@ async function renderCar(root) {
     blur: px(STYLE.body_blur ?? 0.002),
     levels: STYLE.body_levels ?? null,
   });
-  out.body = bodyCanvas.toDataURL('image/png');
+  const sheets = { body: bodyCanvas };
 
   swap(groups.body, gloss);
   shoot();
-  out.shade = flatten(grab(), {
+  sheets.shade = flatten(grab(), {
     blur: px(STYLE.gloss_blur ?? 0.004),
     levels: STYLE.gloss_levels ?? null,
-  }).toDataURL('image/png');
+  });
   swap(groups.body, original.get(groups.body[0]));
 
   show(['glass']);
@@ -515,15 +605,15 @@ async function renderCar(root) {
   // и складывается детализация, которой не даёт ни одна линия.
   show(['trim']);
   shoot();
-  out.trim = flatten(grab(), { blur: px(0.0008), levels: null }).toDataURL('image/png');
+  sheets.trim = flatten(grab(), { blur: px(0.0008), levels: null });
 
   show(['chrome']);
   shoot();
-  out.chrome = flatten(grab(), { blur: px(0.0008), levels: null }).toDataURL('image/png');
+  sheets.chrome = flatten(grab(), { blur: px(0.0008), levels: null });
 
   only(['glass']);
   shoot();
-  out.glass = flatten(grab(), { blur: px(0.001), levels: null }).toDataURL('image/png');
+  sheets.glass = flatten(grab(), { blur: px(0.001), levels: null });
 
   show(['light']);
   shoot();
@@ -531,17 +621,84 @@ async function renderCar(root) {
   // к камере ребром: на кадре от него остаётся узкая полоса, сходящая
   // на нет острым концом. Резкий край такой полосы читается не фарой,
   // а клином, воткнутым в крыло, — половина пикселя размытия его скругляет.
-  out.light = flatten(grab(), { blur: px(0.0018), levels: null }).toDataURL('image/png');
+  sheets.light = flatten(grab(), { blur: px(0.0018), levels: null });
 
   show(['tail']);
   shoot();
-  out.tail = flatten(grab(), { blur: px(0.0008), levels: null }).toDataURL('image/png');
+  sheets.tail = flatten(grab(), { blur: px(0.0008), levels: null });
 
   show(['wheel', 'tyre', 'rim']);
   const wheels = shoot();
   // Резина тёмная, а диск должен читаться: спицы видно только по перепаду
   // между ступенями, своей линии у них нет — сбоку они сливаются в один круг.
   const wheelCanvas = flatten(grab(), { blur: px(0.0004), levels: null });
+
+  /**
+   * Пасс глубины по всей машине — из него считается карта каверн.
+   *
+   * Снимается в отдельную цель без мультисэмплинга и без тональной кривой:
+   * глубина упакована в четыре байта, и любое усреднение соседних пикселей
+   * или кривая превращают её в мусор.
+   */
+  {
+    const depthMat = new MeshDepthMaterial({ depthPacking: RGBADepthPacking });
+    show(['body', 'trim', 'chrome', 'glass', 'light', 'tail', 'wheel', 'tyre', 'rim']);
+    swapAll(depthMat);
+    const target = new WebGLRenderTarget(W, H, { samples: 0 });
+    const tone = renderer.toneMapping;
+    const space = renderer.outputColorSpace;
+    renderer.toneMapping = NoToneMapping;
+    renderer.outputColorSpace = LinearSRGBColorSpace;
+    renderer.setRenderTarget(target);
+    renderer.render(scene, camera);
+    const raw = new Uint8Array(W * H * 4);
+    renderer.readRenderTargetPixels(target, 0, 0, W, H, raw);
+    renderer.setRenderTarget(null);
+    renderer.toneMapping = tone;
+    renderer.outputColorSpace = space;
+    target.dispose();
+    restoreAll();
+
+    // readRenderTargetPixels отдаёт кадр снизу вверх — переворачиваем.
+    const pixels = new Uint8Array(W * H * 4);
+    for (let y = 0; y < H; y++) {
+      pixels.set(raw.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
+    }
+
+    const AO = CONFIG.style?.cavity ?? {};
+    const cavity = cavityMap(pixels, W, H, {
+      radius: Math.max(2, Math.round((AO.radius ?? 0.006) * W)),
+      strength: AO.strength ?? 0.55,
+      limit: AO.limit_m ?? 0.04,
+      full: AO.full_m ?? 0.008,
+      floor: AO.floor_m ?? 0.0015,
+      soften: (AO.soften ?? 0.0005) * W,
+      range: margin * 2,
+    });
+
+    if (PARAMS.get('debug') === 'cavity') out.cavity = cavity.toDataURL('image/png');
+    /**
+     * Тень кладётся умножением в каждый неподвижный слой. В профиль колесо
+     * крутится, и запечённая в него тень арки ехала бы вместе со спицами;
+     * в три четверти колесо стоит в кадре намертво — там оно тоже слой.
+     */
+    const shaded = VIEW === 'race' ? Object.values(sheets) : [...Object.values(sheets), wheelCanvas];
+    for (const sheet of shaded) {
+      // Маску слоя надо сохранить до умножения: умножение зальёт прозрачные
+      // места чёрным, и вернуть их будет нечем.
+      const mask = document.createElement('canvas');
+      mask.width = W; mask.height = H;
+      mask.getContext('2d').drawImage(sheet, 0, 0);
+
+      const g = sheet.getContext('2d');
+      g.save();
+      g.globalCompositeOperation = 'multiply';
+      g.drawImage(cavity, 0, 0);
+      g.globalCompositeOperation = 'destination-in';
+      g.drawImage(mask, 0, 0);
+      g.restore();
+    }
+  }
 
   // Габарит считается по всем неподвижным слоям: у кузова после разделения
   // на детали свой контур уже, чем у машины.
@@ -562,6 +719,10 @@ async function renderCar(root) {
       if (y < slot.y0) slot.y0 = y;
       if (y > slot.y1) slot.y1 = y;
     }
+  }
+
+  for (const [name, sheet] of Object.entries(sheets)) {
+    out[name] = sheet.toDataURL('image/png');
   }
 
   const circles = halves.map((h) => ({
@@ -742,7 +903,7 @@ const axis = sceneName === 'road' ? 'y' : 'z';
 // Декорации тайлятся во всю ширину экрана, поэтому снимаются кадром втрое
 // крупнее машинного. Машинам кадр менять нельзя — см. «незыблемое правило».
 const frame = mode === 'car' ? 1 : 2;
-await page.goto(`http://localhost:${port}/?mode=${mode}&axis=${axis}&frame=${frame}&view=${view}`);
+await page.goto(`http://localhost:${port}/?mode=${mode}&axis=${axis}&frame=${frame}&view=${view}&debug=${flag('debug') ?? ''}`);
 await page.waitForFunction(() => window.done !== null, null, { timeout: 300_000 });
 const result = await page.evaluate(() => window.done);
 await browser.close();

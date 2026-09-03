@@ -137,6 +137,7 @@ node scripts/render-grid.mjs --car <id> [--paint '#c0392b']
 ```bash
 node scripts/render-sprites.mjs --car <id>                 # профиль
 node scripts/render-sprites.mjs --car <id> --view garage    # три четверти
+node scripts/render-sprites.mjs --car <id> --debug cavity   # плюс карта щелей
 ```
 
 Профиль лежит в `public/sprites/<id>/`, три четверти — в подпапке `garage/`.
