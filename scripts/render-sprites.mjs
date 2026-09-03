@@ -82,6 +82,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 
 const CONFIG = JSON.parse(document.getElementById('config').textContent);
+const HAND = JSON.parse(document.getElementById('hand')?.textContent ?? '{"lines":[]}');
 
 /**
  * Множитель кадра. Для машин всегда 1: кадр один на всю библиотеку, на этом
@@ -593,9 +594,13 @@ async function renderCar(root) {
     const sctx = small.getContext('2d');
     sctx.imageSmoothingQuality = 'high';
     // Буфер видеопамяти читается снизу вверх — переворачиваем обратно.
+    // Разворот обязательно внутри save/restore: канва отдаётся дальше,
+    // и рисовать по ней надо в обычных координатах.
+    sctx.save();
     sctx.translate(0, H);
     sctx.scale(1, -1);
     sctx.drawImage(big, 0, 0, W, H);
+    sctx.restore();
     return small;
   };
 
@@ -618,24 +623,63 @@ async function renderCar(root) {
 
   show(['glass']);
   shoot();
-  out.glass = flatten(grab(), { blur: px(0.008), levels: [0.16, 0.34] }).toDataURL('image/png');
+  out.glass = flatten(grab(), { blur: px(0.002), levels: [0.16, 0.34] }).toDataURL('image/png');
 
   show(['light']);
   shoot();
-  out.light = flatten(grab(), { blur: px(0.005), levels: [0.6, 0.95] }).toDataURL('image/png');
+  out.light = flatten(grab(), { blur: px(0.0015), levels: [0.6, 0.95] }).toDataURL('image/png');
 
   show(['tail']);
   shoot();
-  out.tail = flatten(grab(), { blur: px(0.005), levels: [0.6, 0.95] }).toDataURL('image/png');
+  out.tail = flatten(grab(), { blur: px(0.0015), levels: [0.6, 0.95] }).toDataURL('image/png');
 
   const outlineAlpha = STYLE.edge_outline_alpha ?? 1.0;
   const lineAlpha = STYLE.edge_alpha ?? 0.85;
-  out.edge = linesTo([
+
+  /**
+   * Контуры панелей, нарисованные руками (assets/render/lines/<id>.json).
+   *
+   * Проёмы дверей, кромки арок, подоконная линия. В геометрии исходника их
+   * нет — точнее, есть, но рвано: обвес лежит поверх стокового кузова,
+   * и уступ на щели то есть, то нет. Четыре подхода к автоматическому поиску
+   * кончились одинаково, поэтому эти линии просто заданы координатами.
+   */
+  const drawHand = (canvas) => {
+    if (!HAND.lines?.length) return canvas;
+    const g = canvas.getContext('2d');
+    const tint = STYLE.edge_tint ?? [16, 18, 20];
+    g.strokeStyle = 'rgba(' + tint[0] + ',' + tint[1] + ',' + tint[2] + ',' + lineAlpha + ')';
+    g.lineWidth = STYLE.edge_line_px ?? 1.6;
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+
+    for (const item of HAND.lines) {
+      g.beginPath();
+      if (item.arc) {
+        const [cx, cy, r, from, to] = item.arc;
+        g.arc(cx * W, cy * H, r * W, from * Math.PI / 180, to * Math.PI / 180);
+      } else if (item.path?.length > 1) {
+        const pts = item.path.map(([x, y]) => [x * W, y * H]);
+        g.moveTo(pts[0][0], pts[0][1]);
+        // Через точки ведём кривую, а не ломаную: на изгибе борта углы видно.
+        for (let i = 0; i < pts.length - 1; i++) {
+          const [x0, y0] = pts[i];
+          const [x1, y1] = pts[i + 1];
+          if (i === pts.length - 2) g.lineTo(x1, y1);
+          else g.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+        }
+      }
+      g.stroke();
+    }
+    return canvas;
+  };
+
+  out.edge = drawHand(linesTo([
     { mask: outlineFor(['glass'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha },
     { mask: outlineFor(['light'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha },
     { mask: outlineFor(['tail'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha },
     { mask: outlineFor(['body'], STYLE.edge_outline_px ?? 2.6), alpha: outlineAlpha },
-  ]).toDataURL('image/png');
+  ])).toDataURL('image/png');
 
   show(['wheel']);
   const wheels = shoot();
@@ -749,13 +793,23 @@ async function renderScene(root) {
 
 const TYPES = { '.js': 'text/javascript', '.glb': 'model/gltf-binary' };
 
+/**
+ * Контуры панелей, нарисованные руками. Файла может не быть — тогда машина
+ * идёт с одними границами слоёв.
+ */
+const handFile = carId ? `assets/render/lines/${carId}.json` : null;
+const HAND = handFile && existsSync(handFile)
+  ? JSON.parse(readFileSync(handFile, 'utf8'))
+  : { lines: [] };
+
 const server = createServer((req, res) => {
   const url = req.url.split('?')[0];
   try {
     if (url === '/' || url === '/index.html') {
       const html = PAGE.replace(
         '<script type="module">',
-        `<script type="application/json" id="config">${JSON.stringify(CAMERA)}</script>\n<script type="module">`,
+        `<script type="application/json" id="config">${JSON.stringify(CAMERA)}</script>\n`
+        + `<script type="application/json" id="hand">${JSON.stringify(HAND)}</script>\n<script type="module">`,
       );
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(html);
