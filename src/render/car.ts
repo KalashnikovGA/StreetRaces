@@ -163,8 +163,11 @@ function drawSpriteCar(
 
   // Блики сняты на чёрном, поэтому кладутся сложением: тёмная окраска
   // перестаёт быть плоской заливкой, светлая не выгорает.
+  //
+  // Вполсилы: глянец бьёт по каждой складке исходной геометрии, и на стыке
+  // обвеса со стоковым кузовом именно он раздувал тёмные пятна.
   ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = 0.22;
+  ctx.globalAlpha = 0.13;
   ctx.drawImage(images.shade, dx, dy, frameW, frameH);
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
