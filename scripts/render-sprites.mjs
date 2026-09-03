@@ -78,7 +78,8 @@ const PAGE = `<!doctype html>
 <script type="module">
 import {
   AgXToneMapping, AmbientLight, Box3, HemisphereLight, LinearSRGBColorSpace, Mesh,
-  CanvasTexture, EquirectangularReflectionMapping, MeshBasicMaterial,
+  BufferGeometry, CanvasTexture, EquirectangularReflectionMapping, Float32BufferAttribute,
+  MeshBasicMaterial,
   MeshDepthMaterial, MeshNormalMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
   NoToneMapping, OrthographicCamera, PerspectiveCamera, RGBADepthPacking,
   RectAreaLight, Scene, SRGBColorSpace, Vector3, WebGLRenderer, WebGLRenderTarget,
@@ -441,6 +442,63 @@ function seamMap(normals, depth, solid, w, h, { step, cosMin, cosFull, strength,
   return smooth;
 }
 
+/**
+ * Контур деталей.
+ *
+ * Не линия и не чертёж: мягкое затемнение вдоль края. На иллюстрациях
+ * машину собирают именно им — кромка кузова, стык бампера с крылом, край
+ * зеркала, обод колеса в арке подчёркнуты не штрихом, а тенью, которая
+ * сходит на нет за несколько пикселей.
+ *
+ * Считается по буферу глубины: пиксель попадает в контур, если рядом фон
+ * или скачок глубины, то есть там одна деталь заходит за другую. Скачок
+ * глубины на границе заслонения однозначен, пунктиру взяться неоткуда —
+ * в отличие от карты стыков (§68), которая мерила тонкие зазоры.
+ *
+ * Наружная половина ореола потом срезается маской слоя, поэтому снаружи
+ * силуэта ничего не остаётся: тень ложится внутрь.
+ */
+function edgeMap(depth, solid, w, h, { radius, strength, jump, range, soften }) {
+  const step = jump / range;
+  const mark = document.createElement('canvas');
+  mark.width = w; mark.height = h;
+  const image = mark.getContext('2d').createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const at = y * w + x;
+      if (!solid[at]) continue;
+      let edge = false;
+      for (let k = 0; k < 4 && !edge; k++) {
+        const sx = x + [1, -1, 0, 0][k], sy = y + [0, 0, 1, -1][k];
+        if (sx < 0 || sy < 0 || sx >= w || sy >= h) { edge = true; break; }
+        const j = sy * w + sx;
+        // Фон рядом — край силуэта; резкий скачок вглубь — стык деталей.
+        if (!solid[j] || depth[j] - depth[at] > step) edge = true;
+      }
+      if (edge) image.data[at * 4 + 3] = 255;
+    }
+  }
+  mark.getContext('2d').putImageData(image, 0, 0);
+
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  const g = out.getContext('2d');
+  g.filter = 'blur(' + Math.max(0.5, radius).toFixed(2) + 'px)';
+  g.drawImage(mark, 0, 0);
+  g.filter = 'none';
+  // Размытие раздало альфу тонко; поднимаем её до нужной силы и режем по 1.
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = 'rgba(0,0,0,' + Math.min(1, strength).toFixed(3) + ')';
+  g.fillRect(0, 0, w, h);
+  if (soften <= 0) return out;
+  const smooth = document.createElement('canvas');
+  smooth.width = w; smooth.height = h;
+  const sc = smooth.getContext('2d');
+  sc.filter = 'blur(' + soften.toFixed(2) + 'px)';
+  sc.drawImage(out, 0, 0);
+  return smooth;
+}
+
 function flatten(canvas, { blur, levels }) {
   const w = canvas.width, h = canvas.height;
   const g = canvas.getContext('2d');
@@ -572,6 +630,47 @@ async function renderCar(root) {
   const size = box.getSize(new Vector3());
   const centre = box.getCenter(new Vector3());
   const length = Math.max(size.x, size.z);
+
+  /**
+   * Дальняя половина машины в кадр не едет.
+   *
+   * Камера стоит сбоку, и всё, что лежит за осевой линией, либо закрыто
+   * ближней стороной, либо просвечивает сквозь дырки в ней. У этой модели
+   * в крыле вырезан проём под фару, и сквозь него на крыле проступал
+   * призрак дальней фары с решёткой — тонкие тёмные штрихи, которые
+   * читались остатками чертежа.
+   *
+   * Кузов не трогаем: именно он затыкает проём. Всё остальное — фары,
+   * фонари, хром, накладки, колёса — с дальней стороны только мешает.
+   */
+  {
+    const FAR = ['light', 'tail', 'chrome', 'trim', 'wheel', 'tyre', 'rim'];
+    const side = centre.z;
+    for (const name of FAR) {
+      for (const node of groups[name]) {
+        const src = node.geometry.index ? node.geometry.toNonIndexed() : node.geometry;
+        const pos = src.getAttribute('position');
+        const nor = src.getAttribute('normal');
+        const verts = [], norms = [];
+        for (let i = 0; i < pos.count; i += 3) {
+          const world = [0, 1, 2].map((k) => {
+            const v = new Vector3(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
+            return v.applyMatrix4(node.matrixWorld);
+          });
+          if ((world[0].z + world[1].z + world[2].z) / 3 < side) continue;
+          for (let k = 0; k < 3; k++) {
+            verts.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
+            if (nor) norms.push(nor.getX(i + k), nor.getY(i + k), nor.getZ(i + k));
+          }
+        }
+        if (verts.length === 0 || verts.length === pos.count * 3) continue;
+        const cut = new BufferGeometry();
+        cut.setAttribute('position', new Float32BufferAttribute(verts, 3));
+        if (norms.length) cut.setAttribute('normal', new Float32BufferAttribute(norms, 3));
+        node.geometry = cut;
+      }
+    }
+  }
 
   // Кадр задаётся ortho_scale из camera.json, а не габаритом конкретной машины.
   // Это и есть незыблемое правило: камера одна на всю библиотеку, иначе
@@ -838,6 +937,15 @@ async function renderCar(root) {
       soften: (SEAM.soften ?? 0.0004) * W,
     }) : null;
 
+    const EDGE = CONFIG.style?.edge ?? {};
+    const edges = (EDGE.strength ?? 0) > 0 ? edgeMap(depth, solid, W, H, {
+      radius: Math.max(1, (EDGE.radius ?? 0.0016) * W),
+      strength: EDGE.strength ?? 0.55,
+      jump: EDGE.jump_m ?? 0.02,
+      range: margin * 2,
+      soften: (EDGE.soften ?? 0.0004) * W,
+    }) : null;
+
     const AO = CONFIG.style?.cavity ?? {};
     const cavity = cavityMap(depth, solid, W, H, {
       radius: Math.max(2, Math.round((AO.radius ?? 0.006) * W)),
@@ -853,6 +961,7 @@ async function renderCar(root) {
     if (PARAMS.get('debug') === 'cavity') {
       out.cavity = cavity.toDataURL('image/png');
       if (seams) out.seams = seams.toDataURL('image/png');
+      if (edges) out.edges = edges.toDataURL('image/png');
     }
     /**
      * Тень кладётся умножением в каждый неподвижный слой. В профиль колесо
@@ -871,6 +980,7 @@ async function renderCar(root) {
       g.save();
       g.globalCompositeOperation = 'multiply';
       g.drawImage(cavity, 0, 0);
+      if (edges) g.drawImage(edges, 0, 0);
       if (seams) g.drawImage(seams, 0, 0);
       g.globalCompositeOperation = 'destination-in';
       g.drawImage(mask, 0, 0);

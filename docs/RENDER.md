@@ -47,7 +47,7 @@
 ## Шаг 1: исходник → модель по слоям
 
 ```bash
-node scripts/prepare-car-model.mjs <вход.glb> <id> [--cell 0.0005] [--smooth 2] [--dry]
+node scripts/prepare-car-model.mjs <вход.glb> <id> [--cell 0.0005] [--smooth 5] [--dry]
 ```
 
 Выбрасывает салон и двигатель (сбоку их не видно, а это 40% треугольников),

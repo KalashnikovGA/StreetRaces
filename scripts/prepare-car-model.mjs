@@ -423,7 +423,7 @@ const LOOK = {
   // его стекло сидит в том же материале, и сбоку зеркало выходило призраком.
   // Стекло тёмное, но не чёрное: при нулевой шероховатости оно ловит
   // отражение софтбокса, и окно читается стеклом, а не дырой в кузове.
-  glass: { color: 0x23282d, roughness: 0.04, metalness: 0.2 },
+  glass: { color: 0x39434b, roughness: 0.04, metalness: 0.2 },
   // Резина в исходнике держалась на текстуре, а текстуры мы выбрасываем.
   // Без неё покрышка при шероховатости 0.85 — ровное чёрное кольцо.
   // На 0.6 по боковине идёт блик от окружения, и она становится круглой.
@@ -631,23 +631,24 @@ new GLTFLoader().load('/car.glb', (gltf) => {
     }
 
     /**
-     * Хром под днищем — не хром.
+     * Подвесное железо под днищем в кадр не едет.
      *
      * Банка глушителя и патрубки сидят в том же материале, что молдинги
-     * окон, и выходили светлым слитком под бампером: сбоку он читался
-     * отдельно стоящей деталью, а не частью машины. Под днищем блестеть
-     * нечему — там тень. Всё хромовое ниже пятой части высоты уходит
-     * в тёмную накладку.
+     * окон, и торчали из-под бампера светлым слитком: сбоку он читался
+     * отдельно приставленной деталью. На фотографии машины сбоку выпуска
+     * не видно — он в тени под задней юбкой. Всё хромовое и накладное ниже
+     * этого уровня выбрасывается; колёса не трогаем, они достают до земли.
      */
-    const lowChrome = whole.min.y + rawSize.y * 0.2;
-    if (buckets.get('chrome')?.length && buckets.get('trim')) {
+    const underfloor = whole.min.y + rawSize.y * 0.18;
+    for (const name of ['chrome', 'trim']) {
+      const list = buckets.get(name);
+      if (!list?.length) continue;
       const keep = [];
-      for (const geometry of buckets.get('chrome')) {
-        const { inside, outside } = splitByHeight(geometry, lowChrome);
-        if (inside) buckets.get('trim').push(inside);
-        if (outside) keep.push(outside);
+      for (const geometry of list) {
+        const { outside } = splitByHeight(geometry, underfloor);
+        if (outside) keep.push(outside); else dropped++;
       }
-      buckets.set('chrome', keep);
+      buckets.set(name, keep);
     }
 
     /**
