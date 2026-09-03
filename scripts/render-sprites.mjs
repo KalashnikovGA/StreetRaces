@@ -668,6 +668,8 @@ async function renderCar(root) {
           if (i === pts.length - 2) g.lineTo(x1, y1);
           else g.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
         }
+        // Замкнутые — это ручки и лючки: у них своя форма, а не штрих.
+        if (item.closed) g.closePath();
       }
       g.stroke();
     }
