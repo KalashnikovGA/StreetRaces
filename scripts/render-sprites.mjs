@@ -78,9 +78,10 @@ const PAGE = `<!doctype html>
 <script type="module">
 import {
   AgXToneMapping, AmbientLight, Box3, HemisphereLight, LinearSRGBColorSpace, Mesh,
-  MeshBasicMaterial, MeshDepthMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
-  NoToneMapping, OrthographicCamera, PerspectiveCamera, RGBADepthPacking, RectAreaLight,
-  Scene, SRGBColorSpace, Vector3, WebGLRenderer, WebGLRenderTarget,
+  MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, MeshPhysicalMaterial,
+  MeshStandardMaterial, NoToneMapping, OrthographicCamera, PerspectiveCamera,
+  RGBADepthPacking, RectAreaLight, Scene, SRGBColorSpace, Vector3, WebGLRenderer,
+  WebGLRenderTarget,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
@@ -246,19 +247,7 @@ function shoot() {
  *
  * Возвращает канву с чёрной заливкой и альфой по глубине каверны.
  */
-function cavityMap(pixels, w, h, { radius, strength, limit, full, floor, range, soften, dilate }) {
-  const depth = new Float32Array(w * h);
-  const solid = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) {
-    // RGBADepthPacking: четыре байта — одно число с плавающей точкой в [0,1].
-    const r = pixels[i * 4] / 255, g = pixels[i * 4 + 1] / 255;
-    const b = pixels[i * 4 + 2] / 255, a = pixels[i * 4 + 3] / 255;
-    const d = r + g / 255 + b / 65025 + a / 16581375;
-    depth[i] = d;
-    // Фон лежит на дальней плоскости — в расчёт не берём.
-    solid[i] = d < 0.999 ? 1 : 0;
-  }
-
+function cavityMap(depth, solid, w, h, { radius, strength, limit, full, floor, range, soften, dilate }) {
   // Метры переводим в доли буфера: у ортокамеры глубина линейна, у длинного
   // фокуса витрины — почти линейна, и на щелях в миллиметры разница не видна.
   const near = limit / range;
@@ -342,6 +331,74 @@ function cavityMap(pixels, w, h, { radius, strength, limit, full, floor, range, 
 
   // Буфер глубины снимается без сглаживания, иначе упаковка ломается,
   // — поэтому кромки каверн ступенчатые. Полпикселя размытия их снимает.
+  const smooth = document.createElement('canvas');
+  smooth.width = w; smooth.height = h;
+  const sc = smooth.getContext('2d');
+  sc.filter = 'blur(' + soften.toFixed(2) + 'px)';
+  sc.drawImage(out, 0, 0);
+  return smooth;
+}
+
+/**
+ * Карта стыков панелей.
+ *
+ * Карта каверн (см. выше) меряет глубину, и на зазорах это подводит:
+ * зазор двери редко идёт одной глубины — где-то он на волос глубже порога
+ * отбора, где-то мельче, и линия выходит пунктиром. Пунктир поперёк крыла
+ * и есть те самые «непонятные линии».
+ *
+ * Нормаль ведёт себя иначе. На гладкой панели она поворачивается на градусы
+ * от пикселя к пикселю; на кромке зазора — на десятки, потому что там
+ * поверхность уходит внутрь. Признак не зависит от того, насколько зазор
+ * глубок, поэтому линия получается сплошной по всей длине стыка.
+ *
+ * Чтобы по силуэту не пошла обводка, перепад нормали засчитывается только
+ * там, где сосед лежит на той же глубине: на краю машины и на границе
+ * заслонённых частей нормаль тоже прыгает, но это не стык, а край.
+ */
+function seamMap(normals, depth, solid, w, h, { step, cosMin, cosFull, strength, limit, range, soften }) {
+  const near = limit / range;
+  const nx = new Float32Array(w * h);
+  const ny = new Float32Array(w * h);
+  const nz = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    // MeshNormalMaterial пишет нормаль как (n * 0.5 + 0.5).
+    nx[i] = normals[i * 4] / 127.5 - 1;
+    ny[i] = normals[i * 4 + 1] / 127.5 - 1;
+    nz[i] = normals[i * 4 + 2] / 127.5 - 1;
+  }
+
+  const alpha = new Float32Array(w * h);
+  const around = [[step, 0], [0, step], [step, step], [step, -step]];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const at = y * w + x;
+      if (!solid[at]) continue;
+      let worst = 1;
+      for (const [dx, dy] of around) {
+        const ax = x - dx, ay = y - dy, bx = x + dx, by = y + dy;
+        if (ax < 0 || ay < 0 || bx >= w || by >= h) continue;
+        const a = ay * w + ax, b = by * w + bx;
+        if (!solid[a] || !solid[b]) continue;
+        // Сосед за перепадом глубины — это край или заслон, а не стык.
+        if (Math.abs(depth[a] - depth[at]) > near) continue;
+        if (Math.abs(depth[b] - depth[at]) > near) continue;
+        const dot = nx[a] * nx[b] + ny[a] * ny[b] + nz[a] * nz[b];
+        if (dot < worst) worst = dot;
+      }
+      if (worst >= cosMin) continue;
+      const k = Math.min(1, (cosMin - worst) / Math.max(1e-6, cosMin - cosFull));
+      alpha[at] = k * strength;
+    }
+  }
+
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  const image = out.getContext('2d').createImageData(w, h);
+  for (let i = 0; i < w * h; i++) image.data[i * 4 + 3] = Math.round(255 * alpha[i]);
+  out.getContext('2d').putImageData(image, 0, 0);
+  if (soften <= 0) return out;
+
   const smooth = document.createElement('canvas');
   smooth.width = w; smooth.height = h;
   const sc = smooth.getContext('2d');
@@ -699,8 +756,56 @@ async function renderCar(root) {
       pixels.set(raw.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
     }
 
+    /**
+     * Пасс нормалей — из него считается карта стыков. Тот же кадр, та же
+     * цель без мультисэмплинга: усреднение соседних пикселей размывает
+     * ровно тот перепад, который мы ищем.
+     */
+    swapAll(new MeshNormalMaterial());
+    const nTarget = new WebGLRenderTarget(W, H, { samples: 0 });
+    renderer.toneMapping = NoToneMapping;
+    renderer.outputColorSpace = LinearSRGBColorSpace;
+    renderer.setRenderTarget(nTarget);
+    renderer.render(scene, camera);
+    const nRaw = new Uint8Array(W * H * 4);
+    renderer.readRenderTargetPixels(nTarget, 0, 0, W, H, nRaw);
+    renderer.setRenderTarget(null);
+    renderer.toneMapping = tone;
+    renderer.outputColorSpace = space;
+    nTarget.dispose();
+    restoreAll();
+
+    const normals = new Uint8Array(W * H * 4);
+    for (let y = 0; y < H; y++) {
+      normals.set(nRaw.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
+    }
+
+    // Глубина: четыре байта на число, распаковывается один раз на обе карты.
+    const depth = new Float32Array(W * H);
+    const solid = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      const r = pixels[i * 4] / 255, g = pixels[i * 4 + 1] / 255;
+      const b = pixels[i * 4 + 2] / 255, a = pixels[i * 4 + 3] / 255;
+      const d = r + g / 255 + b / 65025 + a / 16581375;
+      depth[i] = d;
+      // Фон лежит на дальней плоскости — в расчёт не берём.
+      solid[i] = d < 0.999 ? 1 : 0;
+    }
+
+    const SEAM = CONFIG.style?.seams ?? {};
+    const rad = (deg) => Math.cos((deg ?? 0) * Math.PI / 180);
+    const seams = SEAM.strength > 0 ? seamMap(normals, depth, solid, W, H, {
+      step: Math.max(1, Math.round((SEAM.step ?? 0.0007) * W)),
+      cosMin: rad(SEAM.angle_min_deg ?? 34),
+      cosFull: rad(SEAM.angle_full_deg ?? 70),
+      strength: SEAM.strength ?? 0.5,
+      limit: SEAM.limit_m ?? 0.03,
+      range: margin * 2,
+      soften: (SEAM.soften ?? 0.0004) * W,
+    }) : null;
+
     const AO = CONFIG.style?.cavity ?? {};
-    const cavity = cavityMap(pixels, W, H, {
+    const cavity = cavityMap(depth, solid, W, H, {
       radius: Math.max(2, Math.round((AO.radius ?? 0.006) * W)),
       strength: AO.strength ?? 0.55,
       limit: AO.limit_m ?? 0.04,
@@ -711,7 +816,10 @@ async function renderCar(root) {
       range: margin * 2,
     });
 
-    if (PARAMS.get('debug') === 'cavity') out.cavity = cavity.toDataURL('image/png');
+    if (PARAMS.get('debug') === 'cavity') {
+      out.cavity = cavity.toDataURL('image/png');
+      if (seams) out.seams = seams.toDataURL('image/png');
+    }
     /**
      * Тень кладётся умножением в каждый неподвижный слой. В профиль колесо
      * крутится, и запечённая в него тень арки ехала бы вместе со спицами;
@@ -729,6 +837,7 @@ async function renderCar(root) {
       g.save();
       g.globalCompositeOperation = 'multiply';
       g.drawImage(cavity, 0, 0);
+      if (seams) g.drawImage(seams, 0, 0);
       g.globalCompositeOperation = 'destination-in';
       g.drawImage(mask, 0, 0);
       g.restore();
