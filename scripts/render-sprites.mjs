@@ -74,9 +74,9 @@ const PAGE = `<!doctype html>
 <script type="module">
 import {
   AgXToneMapping, AmbientLight, Box3, HemisphereLight, LinearSRGBColorSpace, Mesh,
-  MeshDepthMaterial, MeshNormalMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
-  NoToneMapping, OrthographicCamera, RectAreaLight, RGBADepthPacking, Scene,
-  SRGBColorSpace, Vector3, WebGLRenderer, WebGLRenderTarget,
+  MeshNormalMaterial, MeshPhysicalMaterial, MeshStandardMaterial, NoToneMapping,
+  OrthographicCamera, RectAreaLight, Scene, SRGBColorSpace, Vector3,
+  WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
@@ -300,125 +300,77 @@ function flatten(canvas, { blur, levels }) {
  * mask даёт силуэт: у карты глубины альфа занята упаковкой числа, поэтому
  * непрозрачность берётся с отдельного прохода.
  */
-function findEdges(mask, depths, width, height, opts) {
+/**
+ * Контур детали: граница её собственного пятна.
+ *
+ * Раньше линии искались по излому глубины — и внутри кузова получались
+ * рваными и колючими. Иначе и не выйдет: глубина снимается с децимированной
+ * модели, где обвес лежит поверх стокового кузова, и никакая обработка
+ * не превратит такой излом в проведённую от руки линию.
+ *
+ * Зато граница слоя — это точная замкнутая кривая, а не находка алгоритма.
+ * Силуэт кузова, проёмы окон, оправы фар и фонарей: ровно те линии, которыми
+ * рисовальщик и подчёркивает детали машины сбоку.
+ */
+function outlineOf(alpha, width, height) {
   const size = width * height;
-
-  // Глубина распаковывается один раз в метры: делить четыре байта на каждый
-  // из четырёх соседей у десяти миллионов пикселей — минуты работы впустую.
-  const z = new Float32Array(size);
   const solid = new Uint8Array(size);
-  for (let p = 0; p < size; p++) {
-    const i = p * 4;
-    solid[p] = mask[i + 3] > 8 ? 1 : 0;
-    z[p] = (depths[i] / 255 + depths[i + 1] / 65025 + depths[i + 2] / 16581375) * opts.range;
+  for (let p = 0; p < size; p++) solid[p] = alpha[p * 4 + 3] > 8 ? 1 : 0;
+
+  // Фон заливается от края кадра. Иначе в контур попадают и внутренние дырки
+  // кузова — щели между панелями, прорези обвеса, — а они на рендере рваные
+  // и дают тот самый пунктир вместо линии. Снаружи такая дырка недостижима,
+  // поэтому заливка её и отсекает.
+  const outside = new Uint8Array(size);
+  const stack = new Int32Array(size);
+  let top = 0;
+  const push = (p) => { if (!solid[p] && !outside[p]) { outside[p] = 1; stack[top++] = p; } };
+  for (let x = 0; x < width; x++) { push(x); push((height - 1) * width + x); }
+  for (let y = 0; y < height; y++) { push(y * width); push(y * width + width - 1); }
+  while (top > 0) {
+    const p = stack[--top];
+    const x = p % width, y = (p / width) | 0;
+    if (x > 0) push(p - 1);
+    if (x < width - 1) push(p + 1);
+    if (y > 0) push(p - width);
+    if (y < height - 1) push(p + width);
   }
 
-  // Две линии разной толщины, как у рисовальщика: силуэт обводится жирнее
-  // внутренних — проёмов, арок, стыка капота.
-  const outline = new Uint8Array(size);
-  const inner = new Uint8Array(size);
-
+  const edge = new Uint8Array(size);
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const p = y * width + x;
       if (!solid[p]) continue;
-      const l = p - 1, r = p + 1, u = p - width, d = p + width;
-      if (!solid[l] || !solid[r] || !solid[u] || !solid[d]) {
-        outline[p] = 1;
-        continue;
-      }
-
-      // Излом глубины, а не её наклон. У плавно изогнутой панели глубина
-      // меняется быстро, но ровно, и разность соседей ловит её наравне
-      // со щелью двери — линии выходили рваными и лезли на гладкий борт.
-      // Вторая разность на ровном изгибе почти ноль, а на щели, кромке арки
-      // или стыке капота — вся глубина уступа сразу.
-      const bend = Math.abs(z[l] + z[r] - 2 * z[p]) + Math.abs(z[u] + z[d] - 2 * z[p]);
-      if (bend > opts.gap) inner[p] = 1;
+      if (outside[p - 1] || outside[p + 1] || outside[p - width] || outside[p + width]) edge[p] = 1;
     }
   }
+  return edge;
+}
 
-  // Штрих собирается в четыре приёма. Порознь ни один не помогает: без
-  // смыкания отбор по длине выкинет разорванный штрих целиком, без отбора
-  // смыкание слепит крап в кляксы.
-  close(inner, width, height, opts.bridgeRadius);   // свести разрывы
-  keepLongRuns(inner, width, height, opts.minRun);  // выкинуть короткие
-
-  // Сглаживание — только после утолщения. Голосование по окрестности стирает
-  // штрих в один пиксель целиком: своих у него в окне меньше трети.
-  const outlineMask = dilate(outline, width, height, opts.outlineRadius);
-  smoothMask(outlineMask, width, height, opts.smoothRadius);
-  const innerMask = dilate(inner, width, height, opts.innerRadius);
-  smoothMask(innerMask, width, height, opts.smoothRadius);
-
-  const out = new Uint8ClampedArray(size * 4);
-  const outlineAlpha = Math.round(255 * opts.outlineAlpha);
-  const innerAlpha = Math.round(255 * opts.innerAlpha);
-  for (let p = 0; p < size; p++) {
-    const alpha = outlineMask[p] ? outlineAlpha : innerMask[p] ? innerAlpha : 0;
-    if (!alpha) continue;
-    const i = p * 4;
-    out[i] = opts.tint[0];
-    out[i + 1] = opts.tint[1];
-    out[i + 2] = opts.tint[2];
-    out[i + 3] = alpha;
+/** Раскраска маски в слой линий. */
+function paintLines(layers, width, height, tint) {
+  const out = new Uint8ClampedArray(width * height * 4);
+  for (const { mask, alpha } of layers) {
+    const value = Math.round(255 * alpha);
+    for (let p = 0; p < mask.length; p++) {
+      if (!mask[p]) continue;
+      const i = p * 4;
+      if (out[i + 3] >= value) continue;
+      out[i] = tint[0];
+      out[i + 1] = tint[1];
+      out[i + 2] = tint[2];
+      out[i + 3] = value;
+    }
   }
   return new ImageData(out, width, height);
 }
 
 /**
- * Смыкание разрывов: расширить, потом сжать обратно. Щель двери на рендере
- * получается пунктиром — в паре мест уступ мельче порога. Расширение сводит
- * соседние отрезки в один, сжатие возвращает толщину.
- */
-function close(mask, width, height, radius) {
-  if (radius <= 0) return;
-  mask.set(erode(dilate(mask, width, height, radius), width, height, radius));
-}
-
-/**
- * Отбор по длине. Главная беда прошлой версии — линий было слишком много:
- * разрыв глубины срабатывает на каждой мелкой складке, и картинка
- * превращается в чертёж. Рисовальщик проводит несколько длинных линий,
- * а не сотню коротких. Оставляем только связные куски длиннее порога.
- */
-function keepLongRuns(mask, width, height, minRun) {
-  if (minRun <= 1) return;
-  const seen = new Uint8Array(mask.length);
-  const stack = new Int32Array(mask.length);
-  const run = new Int32Array(mask.length);
-
-  for (let start = 0; start < mask.length; start++) {
-    if (!mask[start] || seen[start]) continue;
-    let top = 0, count = 0;
-    stack[top++] = start;
-    seen[start] = 1;
-    while (top > 0) {
-      const p = stack[--top];
-      run[count++] = p;
-      const x = p % width, y = (p / width) | 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-          const q = ny * width + nx;
-          if (!mask[q] || seen[q]) continue;
-          seen[q] = 1;
-          stack[top++] = q;
-        }
-      }
-    }
-    if (count < minRun) {
-      for (let i = 0; i < count; i++) mask[run[i]] = 0;
-    }
-  }
-}
-
-/**
  * Сглаживание штриха: пиксель остаётся, если вокруг него достаточно своих.
- * Линия, снятая с пиксельной сетки, идёт ступеньками, и на срезе она выглядит
- * колючей. Голосование по окрестности срезает ступеньки и заодно убирает
- * заусенцы в один пиксель.
+ * Линия, снятая с пиксельной сетки, идёт ступеньками и выглядит колючей.
+ *
+ * Только после утолщения: голосование стирает штрих шириной в один пиксель
+ * целиком — своих у него в окне меньше трети.
  */
 function smoothMask(mask, width, height, radius) {
   if (radius <= 0) return;
@@ -442,17 +394,6 @@ function smoothMask(mask, width, height, radius) {
     }
   }
   mask.set(out);
-}
-
-/** Сжатие — обратная операция к расширению, теми же двумя проходами. */
-function erode(mask, width, height, radius) {
-  if (radius <= 0) return mask;
-  const inverted = new Uint8Array(mask.length);
-  for (let i = 0; i < mask.length; i++) inverted[i] = mask[i] ? 0 : 1;
-  const grown = dilate(inverted, width, height, radius);
-  const out = new Uint8Array(mask.length);
-  for (let i = 0; i < out.length; i++) out[i] = grown[i] ? 0 : 1;
-  return out;
 }
 
 /**
@@ -591,9 +532,7 @@ async function renderCar(root) {
     clearcoat: 0.35, clearcoatRoughness: 0.45,
   });
   const normalMat = new MeshNormalMaterial();
-  const depthMat = new MeshDepthMaterial({ depthPacking: RGBADepthPacking });
   const maskBuf = new Uint8Array(RAW_W * RAW_H * 4);
-  const depthBuf = new Uint8Array(RAW_W * RAW_H * 4);
   const original = new Map();
   for (const list of Object.values(groups)) {
     for (const node of list) original.set(node, node.material);
@@ -627,35 +566,28 @@ async function renderCar(root) {
    * и лежат одним куском. Колесо крутится, поэтому его контур запекается
    * в само колесо.
    */
-  const edgesOf = (names, detail = 1) => {
+  /**
+   * Слой линий: силуэт кузова жирнее, проёмы окон и оправы фар тоньше.
+   * Каждая линия — граница своего слоя, поэтому замкнута и не рвётся.
+   */
+  const radius = (widthPx) => Math.max(1, Math.round((widthPx * SS) / 2));
+  const smoothRadius = Math.max(1, Math.round((STYLE.edge_smooth_px ?? 1.4) * SS / 2));
+
+  const outlineFor = (names, widthPx) => {
     show(names);
-    // Нормали нужны только ради силуэта: у карты глубины альфа занята
-    // упаковкой числа и непрозрачности не показывает.
     swapAll(normalMat);
-    const mask = shootRaw(maskBuf);
-    swapAll(depthMat);
-    const depths = shootRaw(depthBuf);
+    const alpha = shootRaw(maskBuf);
     restoreAll();
+    const mask = dilate(outlineOf(alpha, RAW_W, RAW_H), RAW_W, RAW_H, radius(widthPx));
+    smoothMask(mask, RAW_W, RAW_H, smoothRadius);
+    return mask;
+  };
 
-    // Толщина задаётся в пикселях кадра и переводится в радиус крупного буфера.
-    const radius = (widthPx) => Math.max(1, Math.round((widthPx * SS) / 2));
-    const lines = findEdges(mask, depths, RAW_W, RAW_H, {
-      range: depthRange,
-      gap: STYLE.edge_gap ?? 0.002,
-      bridgeRadius: Math.max(1, Math.round((STYLE.edge_bridge_px ?? 4) * SS / 2)),
-      minRun: Math.round((STYLE.edge_min_run_px ?? 26) * SS * detail),
-      smoothRadius: Math.max(1, Math.round((STYLE.edge_smooth_px ?? 1.4) * SS / 2)),
-      outlineRadius: radius(STYLE.edge_outline_px ?? 2.2),
-      innerRadius: radius(STYLE.edge_line_px ?? 1.3),
-      outlineAlpha: STYLE.edge_outline_alpha ?? 1.0,
-      innerAlpha: STYLE.edge_alpha ?? 0.8,
-      tint: STYLE.edge_tint ?? [16, 18, 20],
-    });
-
-    // Линия считается крупно и ужимается: посчитанная сразу в кадре, она рваная.
+  const linesTo = (layers) => {
+    const image = paintLines(layers, RAW_W, RAW_H, STYLE.edge_tint ?? [16, 18, 20]);
     const big = document.createElement('canvas');
     big.width = RAW_W; big.height = RAW_H;
-    big.getContext('2d').putImageData(lines, 0, 0);
+    big.getContext('2d').putImageData(image, 0, 0);
     const small = document.createElement('canvas');
     small.width = W; small.height = H;
     const sctx = small.getContext('2d');
@@ -696,14 +628,26 @@ async function renderCar(root) {
   shoot();
   out.tail = flatten(grab(), { blur: px(0.005), levels: [0.6, 0.95] }).toDataURL('image/png');
 
-  out.edge = edgesOf(['body', 'glass', 'light', 'tail']).toDataURL('image/png');
+  const outlineAlpha = STYLE.edge_outline_alpha ?? 1.0;
+  const lineAlpha = STYLE.edge_alpha ?? 0.85;
+  out.edge = linesTo([
+    { mask: outlineFor(['glass'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha },
+    { mask: outlineFor(['light'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha },
+    { mask: outlineFor(['tail'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha },
+    { mask: outlineFor(['body'], STYLE.edge_outline_px ?? 2.6), alpha: outlineAlpha },
+  ]).toDataURL('image/png');
 
   show(['wheel']);
   const wheels = shoot();
-  // Колесо остаётся тёмным: резина не бликует, и вытягивать её незачем.
-  const wheelCanvas = flatten(grab(), { blur: px(0.0015), levels: [0.10, 0.24, 0.50] });
+  // Резина тёмная, а диск должен читаться: спицы видно только по перепаду
+  // между ступенями, своей линии у них нет — сбоку они сливаются в один круг.
+  const wheelCanvas = flatten(grab(), { blur: px(0.0005), levels: [0.07, 0.32, 0.80] });
   // Контур колеса запекается в него же: колесо крутится отдельным спрайтом.
-  wheelCanvas.getContext('2d').drawImage(edgesOf(['wheel'], 0.12), 0, 0);
+  wheelCanvas.getContext('2d').drawImage(
+    linesTo([{ mask: outlineFor(['wheel'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha }]),
+    0, 0,
+  );
+  show(['wheel']);
 
   const bodyBox = bounds(body.pixels);
   const wheelBox = bounds(wheels.pixels);
