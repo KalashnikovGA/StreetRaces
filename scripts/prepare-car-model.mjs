@@ -86,7 +86,9 @@ const DROP = /badge|emblem|logo|plate_d|nameplate|manufacturerplate|\\bint_|inte
 const GROUPS = [
   ['tail', /\\btl_|taillight|tail_?lamp|red_?glass/i],
   ['light', /\\bhl_|light|lamp|headlamp/i],
-  ['glass', /glass|window|windscreen|windshield|glazing/i],
+  // Рассеиватель фары — тоже стекло: у него свой материал, и без правила
+  // он выпадал в неопознанные, оставляя фару без переднего стекла.
+  ['glass', /glass|window|windscreen|windshield|glazing|lens/i],
   ['tyre', /tyre|tire/i],
   ['rim', /_rim|\\brim|spoke|\\bhub|calliper|caliper|brake|disc|bolt/i],
   ['wheel', /wheel/i],

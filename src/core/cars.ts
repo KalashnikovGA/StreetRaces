@@ -52,7 +52,7 @@ export const HP_PER_STRENGTH = 1.85;
  * из которой отрендерены спрайты, — §11 не допускает плейсхолдеров в витрине.
  */
 export const CAR_MODELS: CarModel[] = [
-  { id: 'falke_t9', name: '«Falke T9»',     nick: 'Жаба',     klass: 'A', baseStrength: 268, silhouette: 'заднемоторное купе 70-х с широкими арками', priceCoins: 430_000 },
+  { id: 'habicht_t3', name: '«Habicht T3»', nick: 'Кабан',    klass: 'A', baseStrength: 258, silhouette: 'заднеприводное купе 80-х с прямыми гранями', priceCoins: 400_000 },
 ];
 
 /**
@@ -79,6 +79,7 @@ export const LADDER_MODELS: CarModel[] = [
   { id: 'ronin_ss',  name: '«Ronin Supra-S»',nick: 'Супра',    klass: 'B', baseStrength: 194, silhouette: 'Toyota Supra',   priceCoins: 115_000 },
   { id: 'kaiser_r34',name: '«Kaiser R34»',   nick: 'Скай',     klass: 'A', baseStrength: 246, silhouette: 'Nissan Skyline', priceCoins: 340_000 },
   { id: 'corsa_f40', name: '«Corsa F40»',    nick: 'Итальянец',klass: 'A', baseStrength: 262, silhouette: 'Ferrari F40',    priceCoins: 420_000 },
+  { id: 'falke_t9',  name: '«Falke T9»',    nick: 'Жаба',     klass: 'A', baseStrength: 268, silhouette: 'заднемоторное купе 70-х', priceCoins: 430_000 },
 ];
 
 /** Всё, что умеет считать ядро: игра плюс опорная лестница. */
@@ -97,6 +98,7 @@ export const ALL_MODELS: CarModel[] = [...LADDER_MODELS, ...CAR_MODELS]
 export const REPLAY_ORDER: readonly string[] = [
   'zarya965', 'lada6', 'ronin_gx', 'lada_sport', 'bavar320',
   'ronin_ss', 'kaiser_r34', 'corsa_f40', 'vogel190', 'bavar_c40', 'falke_t9',
+  'habicht_t3',
 ];
 
 const MODELS_BY_ID = new Map(ALL_MODELS.map((m) => [m.id, m]));

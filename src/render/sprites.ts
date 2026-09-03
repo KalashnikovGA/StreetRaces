@@ -44,7 +44,7 @@ const LAYERS: CarLayer[] = [
  * Векторная отрисовка осталась запасным путём на те секунды, пока картинки
  * ещё грузятся.
  */
-export const SPRITE_READY = new Set(['falke_t9']);
+export const SPRITE_READY = new Set(['habicht_t3']);
 
 /**
  * Ракурс. Как в первой браузерной игре: в гараже машина показана
