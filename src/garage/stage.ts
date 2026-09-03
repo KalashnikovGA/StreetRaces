@@ -139,7 +139,7 @@ export class Stage {
 
     if (!this.modelId) return;
 
-    const carWidth = Math.min(w * CAR_SHARE, (h * 0.86) / 0.42);
+    const carWidth = Math.min(w * CAR_SHARE, (h * 0.84) / 0.42);
     const carHeight = carWidth * 0.42;
 
     // Витрина — фиксированный ракурс три четверти, статичная съёмка. Машина
@@ -186,6 +186,9 @@ export class Stage {
       const rowHeight = (h * SKIRTING) / rows;
       ctx.save();
       ctx.globalAlpha = 0.26;
+      // Бетон в исходнике снят тёплым, а бокс теперь серый: сбавляем
+      // насыщенность, иначе стена уводит весь экран в коричневое.
+      ctx.filter = 'saturate(0.45)';
       for (let row = 0; row < rows; row++) {
         tileMirrored(ctx, wall, 0, row * rowHeight, w, rowHeight, row * 173);
       }
@@ -201,8 +204,8 @@ export class Stage {
 
     // Единственный тёплый источник: лампа под потолком бокса.
     const lamp = ctx.createRadialGradient(w * 0.5, -h * 0.1, 0, w * 0.5, -h * 0.1, h * 1.15);
-    lamp.addColorStop(0, 'rgba(224,123,57,0.20)');
-    lamp.addColorStop(1, 'rgba(224,123,57,0)');
+    lamp.addColorStop(0, 'rgba(192,143,78,0.14)');
+    lamp.addColorStop(1, 'rgba(192,143,78,0)');
     ctx.fillStyle = lamp;
     ctx.fillRect(0, 0, w, h);
 

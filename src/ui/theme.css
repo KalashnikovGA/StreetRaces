@@ -1,25 +1,30 @@
 /**
  * Дизайн-система игры. Один источник правды для всех экранов.
  *
- * Мир — не ночной Токио, а гаражный кооператив: холодный бетон под тёплым
- * натриевым фонарём. Отсюда все решения ниже: нулевые скругления, отсутствие
- * свечений, табличные цифры и плотность вместо воздуха.
+ * Мир прежний — гаражный кооператив, — но подача современная: чёрное,
+ * серое, белое и ровно два приглушённых акцента. Отсюда всё ниже: почти
+ * нулевые скругления, отсутствие свечений, табличные цифры, узкие прописные
+ * подписи и плотность вместо воздуха.
+ *
+ * Акцентов два и они не спорят: бронза ведёт к действию, сталь отмечает
+ * выигранное. Всё остальное — степени серого.
  */
 
 :root {
-  --asphalt: #16181a;
-  --concrete: #2a2e31;
-  --concrete-lt: #3d4247;
-  --sodium: #e07b39;
-  --gate: #3e6b5f;
-  --chalk: #d8d5ce;
-  --rust: #8c3b2e;
+  /* Серое, белое, чёрное. */
+  --asphalt: #0b0d0f;      /* фон страницы */
+  --pit: #0f1215;          /* врезка: шапки полос, витрина, полоса уровня */
+  --concrete: #15181b;     /* плашка */
+  --concrete-lt: #282d33;  /* линия и приподнятая плашка */
+  --chalk: #f1f4f6;
+  --chalk-dim: #a2aab1;
+  --chalk-faint: #6a7178;
 
-  /* Производные: тот же мел и тот же бетон, разведённые по прозрачности.
-     Новых цветов в палитре нет — есть степени этих семи. */
-  --chalk-dim: #8e8b85;
-  --chalk-faint: #63615d;
-  --pit: #101214;
+  /* Два акцента, оба приглушённые. */
+  --sodium: #c08f4e;       /* бронза: главное действие */
+  --gate: #6e9bb0;         /* сталь: выигранное, класс */
+  /* Проигрыш — тёмная ступень бронзы, а не третий цвет. */
+  --rust: #a9704a;
 
   --display: 'Oswald', 'Arial Narrow', 'Helvetica Neue', sans-serif;
   --body: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -66,9 +71,9 @@ a:hover { color: var(--sodium); }
   display: flex;
   align-items: stretch;
   flex-wrap: wrap;
-  background: var(--concrete);
+  background: var(--pit);
   border-bottom: 1px solid var(--concrete-lt);
-  min-height: 34px;
+  min-height: 42px;
 }
 
 /* Вкладки делят ширину поровну, счётчики прижаты к правому краю:
@@ -82,10 +87,13 @@ a:hover { color: var(--sodium); }
   justify-content: center;
   padding: 0 15px;
   font-family: var(--display);
-  font-size: 15px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
   color: var(--chalk-dim);
   border-right: 1px solid var(--concrete-lt);
   white-space: nowrap;
+  transition: background 120ms linear, color 120ms linear;
 }
 
 .chrome nav a:first-child { border-left: 1px solid var(--concrete-lt); }
@@ -94,7 +102,7 @@ a:hover { color: var(--sodium); }
 .chrome nav a[aria-disabled='true'] { color: var(--chalk-faint); cursor: default; }
 .chrome nav a[aria-disabled='true']:hover { background: transparent; color: var(--chalk-faint); }
 
-/* Активная вкладка отмечена меловой чертой, а не акцентом: натриевый цвет
+/* Активная вкладка отмечена меловой чертой, а не акцентом: акцент
    на экране один и ведёт к главному действию, а не к навигации. */
 .chrome nav a[aria-current='page'] {
   background: var(--asphalt);
@@ -124,17 +132,20 @@ a:hover { color: var(--sodium); }
 
 /* ── каркас страницы ─────────────────────────────────────────────────────── */
 
+/* Каркас во всю ширину окна: экран игры, а не колонка текста. */
 .shell {
   width: 100%;
-  max-width: 1180px;
   margin: 0 auto;
-  padding: 12px 14px 28px;
+  padding: 12px 16px 24px;
   flex: 1 0 auto;
 }
 
 .strip {
   background: var(--concrete);
   border: 1px solid var(--concrete-lt);
+  /* Волосяная светлая грань по верху: плашка читается как отдельная
+     панель, а не как дырка в фоне. Это не градиент — одна линия. */
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
   margin-bottom: 8px;
 }
 
@@ -149,7 +160,7 @@ a:hover { color: var(--sodium); }
   background: var(--pit);
 }
 
-.strip > header h2 { font-size: 16px; }
+.strip > header h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; }
 .strip > header .note { margin-left: auto; color: var(--chalk-faint); font-size: 12px; }
 
 .body { padding: 10px 12px; }
@@ -162,28 +173,32 @@ a:hover { color: var(--sodium); }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 16px;
-  min-height: 32px;
+  padding: 9px 18px;
+  min-height: 34px;
   background: var(--concrete-lt);
   color: var(--chalk);
   border: 1px solid var(--concrete-lt);
   border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
   font-family: var(--display);
-  font-size: 15px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   line-height: 1;
   cursor: pointer;
+  transition: background 120ms linear, color 120ms linear;
 }
 
-.btn:hover { background: #4a5055; }
+.btn:hover { background: #343b42; }
 
 .btn.primary {
   background: var(--sodium);
   border-color: var(--sodium);
-  color: #1a0e05;
+  color: #17110a;
   font-weight: 500;
 }
 
-.btn.primary:hover { background: #ef8b46; }
+.btn.primary:hover { background: #cf9d59; }
 
 .btn.quiet { background: transparent; color: var(--chalk-dim); }
 .btn.quiet:hover { background: var(--concrete-lt); color: var(--chalk); }
@@ -192,7 +207,7 @@ a:hover { color: var(--sodium); }
 .btn[disabled]:hover { background: var(--concrete-lt); }
 .btn.primary[disabled]:hover { background: var(--sodium); }
 
-.btn.small { padding: 5px 10px; min-height: 26px; font-size: 13px; }
+.btn.small { padding: 6px 11px; min-height: 27px; font-size: 12px; letter-spacing: 0.08em; }
 
 .linkish {
   background: none;
@@ -255,10 +270,12 @@ input[type='range'] { accent-color: var(--chalk-faint); }
 /* Шапка списка: подписи к колонкам цифр. Рейтинг в этой игре сравнивают,
    значит колонку надо назвать. */
 .rows .line.head {
-  padding: 5px 12px;
+  padding: 7px 12px;
   background: var(--pit);
   color: var(--chalk-faint);
-  font-size: 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   cursor: default;
 }
 .rows .line.head:hover { background: var(--pit); }
@@ -304,19 +321,29 @@ input[type='range'] { accent-color: var(--chalk-faint); }
 
 /* ── блоки из макета ────────────────────────────────────────────────────── */
 
-/* Светлая шапка ленты. Единственная светлая плашка в интерфейсе: она
-   отбивает ленту событий от таблиц, как в оригинале. */
+/* Шапка ленты. Отбивается от таблиц не светлой заливкой, а бронзовой
+   гранью слева: заливка в белый разрывала тёмный экран пополам. */
 .plate-head {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding: 6px 12px;
-  background: var(--chalk-dim);
-  color: var(--asphalt);
+  padding: 9px 12px 9px 14px;
+  background: var(--pit);
+  border-left: 3px solid var(--sodium);
+  color: var(--chalk);
   font-family: var(--display);
-  font-size: 16px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
 }
-.plate-head .note { margin-left: auto; font-family: var(--body); font-size: 12px; color: #3a3835; }
+.plate-head .note {
+  margin-left: auto;
+  font-family: var(--body);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--chalk-faint);
+}
 
 /* Полоса уровня. Заполненная часть — мел, не акцент: акцент на экране один. */
 .level {
@@ -332,18 +359,18 @@ input[type='range'] { accent-color: var(--chalk-faint); }
 }
 .level .rail {
   flex: 1 1 auto;
-  height: 8px;
-  background: var(--concrete);
+  height: 6px;
+  background: var(--asphalt);
   border: 1px solid var(--concrete-lt);
 }
-.level .rail i { display: block; height: 100%; background: var(--chalk-dim); }
+.level .rail i { display: block; height: 100%; background: var(--gate); }
 
 /* Финишная лента. Косые полосы — та же клетка, что на финише заезда. */
 .band {
-  height: 18px;
+  height: 14px;
   margin-top: 8px;
   border: 1px solid var(--concrete-lt);
-  background: repeating-linear-gradient(115deg, var(--chalk-dim) 0 14px, var(--asphalt) 14px 28px);
+  background: repeating-linear-gradient(115deg, var(--concrete-lt) 0 14px, var(--asphalt) 14px 28px);
 }
 
 /* Подвал: уровень слева, марка справа. */
@@ -382,7 +409,7 @@ input[type='range'] { accent-color: var(--chalk-faint); }
 }
 
 /* Витрина: слева машина, справа правое выравнивание — расположение из макета. */
-.showcase { display: grid; grid-template-columns: minmax(0, 1fr) 340px; }
+.showcase { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 420px); }
 .showcase .stage { border-right: 1px solid var(--concrete-lt); background: var(--pit); }
 .showcase .card {
   display: flex;
@@ -391,10 +418,23 @@ input[type='range'] { accent-color: var(--chalk-faint); }
   text-align: right;
   padding: 16px 16px 14px;
 }
-.showcase .card h1 { font-size: 36px; font-weight: 600; line-height: 1; }
-.showcase .card .model { margin: 4px 0 12px; color: var(--sodium); font-family: var(--display); font-size: 18px; }
-.showcase .card .facts { display: grid; gap: 3px; font-size: 15px; }
-.showcase .card .facts b { font-family: var(--display); font-size: 17px; margin-left: 8px; }
+.showcase .card h1 {
+  font-size: clamp(34px, 3.4vw, 52px);
+  font-weight: 600;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.showcase .card .model {
+  margin: 6px 0 14px;
+  color: var(--sodium);
+  font-family: var(--display);
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.showcase .card .facts { display: grid; gap: 5px; font-size: 14px; color: var(--chalk-dim); }
+.showcase .card .facts b { font-family: var(--display); font-size: 19px; color: var(--chalk); margin-left: 10px; }
 .showcase .card .note { margin: 12px 0 0; font-size: 12px; color: var(--chalk-faint); }
 .showcase .card .actions { display: flex; gap: 8px; margin-top: auto; padding-top: 16px; }
 

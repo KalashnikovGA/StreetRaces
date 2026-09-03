@@ -38,7 +38,7 @@ const START_PURSE: Purse = { coins: 148_200, gold: 36 };
 const START_OWNED: Owned[] = [
   {
     car: { modelId: 'falke_t9', specs: { tires: 6, ignition: 5, clutch: 5, suspension: 6, boost: 4, intake: 5, radiator: 4 } },
-    paint: 'red', plate: 'К 348 ЕЕ', wins: 47, losses: 19,
+    paint: 'silver', plate: 'К 348 ЕЕ', wins: 47, losses: 19,
   },
 ];
 

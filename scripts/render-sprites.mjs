@@ -596,10 +596,42 @@ async function renderCar(root) {
     return;
   }
 
-  out.wheel = await crop(wheelCanvas.toDataURL('image/png'), {
-    x0: front.cx - front.r, x1: front.cx + front.r,
-    y0: front.cy - front.r, y1: front.cy + front.r,
-  });
+  /**
+   * Колесо снимается вдвое подробнее кадра.
+   *
+   * Сцена рисуется втрое крупнее кадра и ужимается до него — на кузове это
+   * ровно то, что нужно, а колесо после ужимания остаётся кружком в двести
+   * пикселей, и спицы, болты и тормозной диск в нём сливаются. Квадрат
+   * вокруг колеса вырезается прямо из крупного буфера, до ужимания:
+   * это те же самые отрисованные пиксели, просто не выброшенные.
+   *
+   * Спрайт всё равно кладётся по радиусу из meta, поэтому его разрешение
+   * ни на что, кроме чёткости, не влияет: незыблемое правило про общий
+   * кадр библиотеки не нарушено.
+   */
+  const WHEEL_SS = 2;
+  show(['wheel', 'tyre', 'rim']);
+  renderer.render(scene, camera);
+  {
+    const src = { x: (front.cx - front.r) * SS, y: (front.cy - front.r) * SS, side: front.r * 2 * SS };
+    const raw = document.createElement('canvas');
+    raw.width = src.side; raw.height = src.side;
+    const rawCtx = raw.getContext('2d');
+    // Фильтр восстановления берётся вполсилы: он рассчитан на ужимание втрое,
+    // а колесо ужимается всего в полтора раза — на полной ширине спицы
+    // и болты уходили бы в мыло.
+    rawCtx.filter = FILTER > 1.5 ? 'blur(' + (FILTER * SS / 6).toFixed(2) + 'px)' : 'none';
+    rawCtx.drawImage(renderer.domElement, src.x, src.y, src.side, src.side, 0, 0, src.side, src.side);
+    rawCtx.filter = 'none';
+
+    const side = front.r * 2 * WHEEL_SS;
+    const hi = document.createElement('canvas');
+    hi.width = side; hi.height = side;
+    const hiCtx = hi.getContext('2d');
+    hiCtx.imageSmoothingQuality = 'high';
+    hiCtx.drawImage(raw, 0, 0, side, side);
+    out.wheel = flatten(hi, { blur: px(0.0002) * WHEEL_SS, levels: null }).toDataURL('image/png');
+  }
 
   window.done = {
     images: out,
