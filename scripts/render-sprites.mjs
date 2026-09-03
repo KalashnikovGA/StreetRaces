@@ -246,7 +246,7 @@ function shoot() {
  *
  * Возвращает канву с чёрной заливкой и альфой по глубине каверны.
  */
-function cavityMap(pixels, w, h, { radius, strength, limit, full, floor, range, soften }) {
+function cavityMap(pixels, w, h, { radius, strength, limit, full, floor, range, soften, dilate }) {
   const depth = new Float32Array(w * h);
   const solid = new Uint8Array(w * h);
   for (let i = 0; i < w * h; i++) {
@@ -292,16 +292,50 @@ function cavityMap(pixels, w, h, { radius, strength, limit, full, floor, range, 
   blurAxis(depth, tmp, 1, 0);
   blurAxis(tmp, soft, 0, 1);
 
-  const out = document.createElement('canvas');
-  out.width = w; out.height = h;
-  const image = out.getContext('2d').createImageData(w, h);
+  const alpha = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) {
     if (!solid[i]) continue;
     // Утоплен относительно окрестности — щель. Приподнят — ребро, его
     // не трогаем: подсветка рёбер и есть обводка.
     const dip = depth[i] - soft[i] - dead;
     const k = Math.min(1, Math.max(0, dip / (deep - dead)));
-    image.data[i * 4 + 3] = Math.round(255 * k * strength);
+    alpha[i] = k * strength;
+  }
+
+  /**
+   * Расширение по максимуму. Настоящий зазор редко идёт одной глубины:
+   * где-то он на волос глубже порога, где-то на волос мельче, и линия
+   * выходит пунктиром — именно это и читается «непонятными линиями».
+   * Максимум по маленькой окрестности сшивает пунктир в сплошную линию
+   * и при этом не рисует ничего нового: там, где не было ни одной точки,
+   * максимум остаётся нулём.
+   */
+  if (dilate > 0) {
+    const axis = (src, dst, dx, dy) => {
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          let best = 0;
+          for (let k = -dilate; k <= dilate; k++) {
+            const sx = x + k * dx, sy = y + k * dy;
+            if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
+            const v = src[sy * w + sx];
+            if (v > best) best = v;
+          }
+          dst[y * w + x] = best;
+        }
+      }
+    };
+    const mid = new Float32Array(w * h);
+    axis(alpha, mid, 1, 0);
+    axis(mid, alpha, 0, 1);
+  }
+
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  const image = out.getContext('2d').createImageData(w, h);
+  for (let i = 0; i < w * h; i++) {
+    if (!solid[i]) continue;
+    image.data[i * 4 + 3] = Math.round(255 * alpha[i]);
   }
   out.getContext('2d').putImageData(image, 0, 0);
   if (soften <= 0) return out;
@@ -673,6 +707,7 @@ async function renderCar(root) {
       full: AO.full_m ?? 0.008,
       floor: AO.floor_m ?? 0.0015,
       soften: (AO.soften ?? 0.0005) * W,
+      dilate: Math.round((AO.dilate ?? 0.0006) * W),
       range: margin * 2,
     });
 
