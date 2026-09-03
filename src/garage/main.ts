@@ -129,14 +129,26 @@ function renderParts(): void {
     value.className = 'level';
     value.append(String(level));
     const of = document.createElement('small');
-    of.textContent = ` / ${MAX_SPEC_LEVEL}`;
+    of.textContent = `/${MAX_SPEC_LEVEL}`;
     value.append(of);
+
+    /**
+     * Шкала из отрезков рядом с цифрой. Цифра остаётся главной — по ней
+     * сравнивают, — а отрезки дают увидеть запас до потолка не читая.
+     */
+    const scale = document.createElement('span');
+    scale.className = 'scale';
+    for (let step = 0; step < MAX_SPEC_LEVEL; step++) {
+      const seg = document.createElement('i');
+      if (step < level) seg.className = 'on';
+      scale.append(seg);
+    }
 
     const note = document.createElement('span');
     note.className = 'price';
     note.textContent = full ? 'некуда' : maxed ? 'потолок' : formatCoins(price);
 
-    button.append(name, value, note);
+    button.append(name, value, scale, note);
     button.addEventListener('click', () => {
       purse.coins -= price;
       entry.car.specs[key] = level + 1;
@@ -177,10 +189,13 @@ function renderSlots(): void {
   for (let i = owned.length; i < career.slots; i++) {
     const cell = document.createElement('div');
     cell.className = 'slot empty';
+    const sign = document.createElement('i');
+    sign.className = 'plus';
+    sign.textContent = '+';
     const plate = document.createElement('span');
     plate.className = 'plate';
     plate.textContent = 'место свободно';
-    cell.append(plate);
+    cell.append(sign, plate);
     cells.push(cell);
   }
 

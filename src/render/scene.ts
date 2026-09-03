@@ -433,17 +433,17 @@ export class RaceScene {
       const state = frame[side];
       const x = side === 'a' ? 14 * k : w / 2 + 14 * k;
       ctx.fillStyle = PALETTE.text;
-      ctx.font = `500 ${(17 * k).toFixed(0)}px Oswald, sans-serif`;
+      ctx.font = `500 ${(17 * k).toFixed(0)}px 'Fira Sans Condensed', sans-serif`;
       ctx.fillText(visual.name, x, 30 * k);
-      ctx.font = `400 ${(13 * k).toFixed(0)}px Onest, system-ui, sans-serif`;
+      ctx.font = `400 ${(13 * k).toFixed(0)}px 'Fira Sans Condensed', system-ui, sans-serif`;
       ctx.fillStyle = PALETTE.textDim;
       const model = getModel(this.modelOf(side));
       // Точек-разделителей в мета-строках нет нигде в игре — только слова.
       ctx.fillText(`${model.nick}, ${horsepower(options.input[side].car)} л.с.`, x, 50 * k);
       ctx.fillStyle = PALETTE.accent;
-      ctx.font = `500 ${(26 * k).toFixed(0)}px Oswald, sans-serif`;
+      ctx.font = `500 ${(26 * k).toFixed(0)}px 'Fira Sans Condensed', sans-serif`;
       ctx.fillText(`${Math.round(state.speed * 3.6)}`, x, 80 * k);
-      ctx.font = `400 ${(12 * k).toFixed(0)}px Onest, system-ui, sans-serif`;
+      ctx.font = `400 ${(12 * k).toFixed(0)}px 'Fira Sans Condensed', system-ui, sans-serif`;
       ctx.fillStyle = PALETTE.textDim;
       ctx.fillText('км/ч', x + 48 * k, 80 * k);
       ctx.fillText(`передача ${state.gear}`, x, 100 * k);
@@ -452,7 +452,7 @@ export class RaceScene {
     if (t >= 0) {
       ctx.textAlign = 'center';
       ctx.fillStyle = PALETTE.textDim;
-      ctx.font = '400 13px Onest, system-ui, sans-serif';
+      ctx.font = "400 13px 'Fira Sans Condensed', system-ui, sans-serif";
       const done = Math.round(Math.max(frame.a.distance, frame.b.distance));
       ctx.fillText(`${done} / ${options.result.trackLength} м`, w / 2, this.height - 14);
     }
@@ -468,10 +468,10 @@ export class RaceScene {
     ctx.fillStyle = 'rgba(16,18,20,0.76)';
     ctx.fillRect(w / 2 - 210, this.height * 0.30, 420, 92);
     ctx.fillStyle = PALETTE.accent;
-    ctx.font = '600 38px Oswald, sans-serif';
+    ctx.font = "600 38px 'Fira Sans Condensed', sans-serif";
     ctx.fillText(winner.name, w / 2, this.height * 0.30 + 44);
     ctx.fillStyle = PALETTE.textDim;
-    ctx.font = '400 15px Onest, system-ui, sans-serif';
+    ctx.font = "400 15px 'Fira Sans Condensed', system-ui, sans-serif";
     const gap = Math.abs(options.result.finishTime.a - options.result.finishTime.b);
     ctx.fillText(
       options.result.photoFinish ? 'фотофиниш' : `+${gap.toFixed(2)} с`,
