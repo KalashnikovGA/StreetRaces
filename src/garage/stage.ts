@@ -9,7 +9,7 @@
  * подвеске. Дальше картинка стоит: одно оркестрованное движение на экран.
  */
 
-import { drawCar } from '../render/car.ts';
+import { CAR_MAX_WIDTH, drawCar } from '../render/car.ts';
 import { PALETTE, PAINTS } from '../render/palette.ts';
 import { loadCarSprites, loadSceneSprites, sceneSprites, tileMirrored } from '../render/sprites.ts';
 
@@ -18,7 +18,7 @@ export interface StageOptions {
   onReady?: () => void;
 }
 
-/** Сколько ширины бокса занимает машина. */
+/** Сколько ширины бокса занимает машина, но не шире CAR_MAX_WIDTH. */
 const CAR_SHARE = 0.66;
 /** Линия пола в долях высоты. */
 const FLOOR = 0.86;
@@ -127,7 +127,7 @@ export class Stage {
 
     if (!this.modelId) return;
 
-    const carWidth = w * CAR_SHARE;
+    const carWidth = Math.min(w * CAR_SHARE, CAR_MAX_WIDTH);
     const carHeight = carWidth * 0.42;
 
     // Заезд в бокс: машина приходит справа и тормозит по экспоненте.
