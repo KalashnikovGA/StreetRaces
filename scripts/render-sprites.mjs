@@ -73,15 +73,23 @@ const PAGE = `<!doctype html>
 </script>
 <script type="module">
 import {
-  AmbientLight, Box3, DirectionalLight, HemisphereLight, Mesh, MeshPhysicalMaterial,
-  MeshStandardMaterial, OrthographicCamera, Scene, SRGBColorSpace, Vector3,
-  WebGLRenderer, ACESFilmicToneMapping,
+  AgXToneMapping, AmbientLight, Box3, HemisphereLight, LinearSRGBColorSpace, Mesh,
+  MeshPhysicalMaterial, MeshStandardMaterial, OrthographicCamera, RectAreaLight,
+  Scene, SRGBColorSpace, Vector3, WebGLRenderer,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 
 const CONFIG = JSON.parse(document.getElementById('config').textContent);
-const W = CONFIG.render.resolution_x;
-const H = CONFIG.render.resolution_y;
+
+/**
+ * Множитель кадра. Для машин всегда 1: кадр один на всю библиотеку, на этом
+ * держится совпадение слоёв. Декорации — другое дело, они тайлятся во всю
+ * ширину экрана, и им кадр машины мелковат.
+ */
+const FRAME = Number(new URLSearchParams(location.search).get('frame')) || 1;
+const W = Math.round(CONFIG.render.resolution_x * FRAME);
+const H = Math.round(CONFIG.render.resolution_y * FRAME);
 
 /**
  * Суперсэмплинг: сцена рисуется втрое крупнее кадра и ужимается до него.
@@ -94,12 +102,40 @@ const H = CONFIG.render.resolution_y;
  */
 const SS = 3;
 
+const PARAMS = new URLSearchParams(location.search);
+const number = (name, fallback) => {
+  const raw = PARAMS.get(name);
+  return raw === null || raw === '' ? fallback : Number(raw);
+};
+
+/**
+ * Свет, экспозиция, базовый цвет кузова и лак. Значения по умолчанию лежат
+ * в camera.json; ключи запроса нужны сетке вариантов (scripts/render-grid.mjs),
+ * которая гоняет одну и ту же сцену с разными числами.
+ */
+/**
+ * Общий множитель силы света. Единица — паспортная мощность ламп из
+ * camera.json; итоговое число выбирается человеком по сетке вариантов
+ * (scripts/render-grid.mjs) и живёт в camera.json как lights_scale.
+ */
+const KEY = number('key', CONFIG.lights_scale ?? 1);
+// Экспозиция задаётся в ступенях, как в Blender: 0 — без поправки.
+const EXPOSURE = Math.pow(2, number('exposure', CONFIG.color_management?.exposure ?? 0));
+const ALBEDO = number('albedo', CONFIG.body?.albedo ?? 0.65);
+const ROUGHNESS = number('rough', CONFIG.body?.roughness ?? 0.5);
+
 const renderer = new WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 renderer.setSize(W * SS, H * SS, false);
 renderer.setPixelRatio(1);
 renderer.outputColorSpace = SRGBColorSpace;
-renderer.toneMapping = ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.76;
+/**
+ * Тональная кривая. Без неё (View Transform = Standard в терминах Blender)
+ * всё ярче единицы становится плоским белым: блик слипается, и деталь под
+ * ним — подштамповки, бортовая линия — пропадает совсем. AgX держит плечо,
+ * поэтому экспозицию можно поднимать, не срезая светА.
+ */
+renderer.toneMapping = AgXToneMapping;
+renderer.toneMappingExposure = EXPOSURE;
 document.body.append(renderer.domElement);
 
 const scene = new Scene();
@@ -107,13 +143,27 @@ const scene = new Scene();
 /**
  * Риг из трёх ламп, одинаковый для всех деталей и всех машин. Разный свет —
  * и слои выглядят вырезанными из разных картинок (§11).
+ *
+ * Лампы площадные, а не направленные. Направленная (Sun) и точечная дают
+ * жёсткую границу тени при любых настройках: мягкость даёт размер источника,
+ * это физика. Панель в несколько метров размывает переход сама.
+ *
+ * Мощность берётся из camera.json в ваттах, как в Blender, и переводится
+ * в яркость панели: L = P / (площадь · π). При таком переводе освещённость
+ * машины зависит только от мощности и расстояния, а размер панели меняет
+ * лишь мягкость — ровно как в Blender.
  */
+RectAreaLightUniformsLib.init();
 for (const item of CONFIG.lights) {
-  const light = new DirectionalLight(
+  const size = item.size ?? 2.5;
+  const light = new RectAreaLight(
     (item.color[0] * 255 << 16) | (item.color[1] * 255 << 8) | (item.color[2] * 255),
-    item.energy / 300,
+    (item.energy / (size * size * Math.PI)) * KEY,
+    size,
+    size,
   );
   light.position.set(...item.location);
+  light.lookAt(0, 0.7, 0);
   scene.add(light);
 }
 /**
@@ -122,7 +172,7 @@ for (const item of CONFIG.lights) {
  * и тёмного низа, а не диффузное затенение. Без него плоская дверь освещена
  * ровно и после умножения на цвет становится пятном.
  */
-scene.add(new HemisphereLight(0xdfe8f0, 0x0e1012, 0.48));
+scene.add(new HemisphereLight(0xdfe8f0, 0x0e1012, 0.30 * KEY));
 
 // Общего света ровно столько, чтобы тень не проваливалась в чёрное.
 scene.add(new AmbientLight(0xffffff, 0.06));
@@ -131,11 +181,28 @@ const readback = document.createElement('canvas');
 readback.width = W; readback.height = H;
 const ctx = readback.getContext('2d', { willReadFrequently: true });
 
-function shoot() {
-  renderer.render(scene, camera);
+/**
+ * Фильтр восстановления, он же Film → Filter Size в Blender. Кадр
+ * размывается на ширину фильтра ещё в крупном разрешении и только потом
+ * ужимается: одного ужимания мало, кромка остаётся ступенчатой.
+ */
+const FILTER = CONFIG.render.filter_size ?? 1.5;
+const soft = document.createElement('canvas');
+soft.width = W * SS; soft.height = H * SS;
+const softCtx = soft.getContext('2d');
+function downscale() {
+  softCtx.clearRect(0, 0, soft.width, soft.height);
+  softCtx.filter = FILTER > 1.5 ? 'blur(' + (FILTER * SS / 3).toFixed(2) + 'px)' : 'none';
+  softCtx.drawImage(renderer.domElement, 0, 0);
+  softCtx.filter = 'none';
   ctx.clearRect(0, 0, W, H);
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(renderer.domElement, 0, 0, W, H);
+  ctx.drawImage(soft, 0, 0, W, H);
+}
+
+function shoot() {
+  renderer.render(scene, camera);
+  downscale();
   return { png: readback.toDataURL('image/png'), pixels: ctx.getImageData(0, 0, W, H).data };
 }
 
@@ -224,12 +291,21 @@ async function renderCar(root) {
 
   if (groups.body.length === 0) { window.done = { error: 'в модели нет слоя body' }; return; }
 
-  const white = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.66, metalness: 0.0 });
+  /**
+   * Кузов рендерится средне-серым, а не белым. Чистый белый выбивает светА:
+   * блик уходит в 255, и всё, что под ним, из файла пропадает — умножением
+   * на цвет окраски эту деталь уже не вернуть. На 0.65 остаётся запас
+   * по яркости, а яркость картинки добирается экспозицией, которую кривая
+   * AgX сжимает, а не срезает.
+   */
+  const grey = new MeshStandardMaterial({ roughness: ROUGHNESS, metalness: 0.0 });
+  // Значение линейное, как Base Color в Blender, а не как код цвета в вёрстке.
+  grey.color.setRGB(ALBEDO, ALBEDO, ALBEDO, LinearSRGBColorSpace);
   // Блики снимаются на чёрном: в кадр попадает только то, что даёт лак.
   // Лак нарочно матовее настоящего: острый блик обводит каждую складку
   // децимированной геометрии и превращает её в царапину.
   const gloss = new MeshPhysicalMaterial({
-    color: 0x000000, roughness: 0.6, metalness: 0.0,
+    color: 0x000000, roughness: Math.max(0.45, ROUGHNESS + 0.1), metalness: 0.0,
     clearcoat: 0.35, clearcoatRoughness: 0.45,
   });
   const original = new Map();
@@ -242,7 +318,7 @@ async function renderCar(root) {
   const swap = (list, material) => { for (const node of list) node.material = material; };
 
   show(['body']);
-  swap(groups.body, white);
+  swap(groups.body, grey);
   const body = shoot();
   out.body = body.png;
 
@@ -398,7 +474,10 @@ page.on('pageerror', (error) => console.error('ошибка страницы:', 
 
 const mode = carId ? 'car' : 'scene';
 const axis = sceneName === 'road' ? 'y' : 'z';
-await page.goto(`http://localhost:${port}/?mode=${mode}&axis=${axis}`);
+// Декорации тайлятся во всю ширину экрана, поэтому снимаются кадром втрое
+// крупнее машинного. Машинам кадр менять нельзя — см. «незыблемое правило».
+const frame = mode === 'car' ? 1 : 2;
+await page.goto(`http://localhost:${port}/?mode=${mode}&axis=${axis}&frame=${frame}`);
 await page.waitForFunction(() => window.done !== null, null, { timeout: 300_000 });
 const result = await page.evaluate(() => window.done);
 await browser.close();

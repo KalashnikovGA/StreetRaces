@@ -102,6 +102,25 @@ def apply_render(config):
     if spec["engine"] == "CYCLES":
         scene.cycles.samples = spec["samples"]
 
+    # Filter Size по умолчанию 1.5 — кромка выходит резкой.
+    scene.render.filter_size = spec.get("filter_size", 2.2)
+
+    # Тональная кривая. Standard — это её отсутствие: всё ярче единицы
+    # становится плоским белым, и деталь под бликом пропадает.
+    grade = config.get("color_management", {})
+    view = scene.view_settings
+    try:
+        view.view_transform = grade.get("view_transform", "AgX")
+    except TypeError:
+        # В Blender 3.x AgX ещё нет, ближайшее — Filmic.
+        view.view_transform = "Filmic"
+    try:
+        view.look = grade.get("look", "Medium Low Contrast")
+    except TypeError:
+        # Имя Look зависит от версии и от выбранного view transform.
+        view.look = "None"
+    view.exposure = grade.get("exposure", 0.0)
+
 
 def apply_lights(config):
     """
@@ -119,8 +138,21 @@ def apply_lights(config):
         obj.data.color = item["color"]
         if hasattr(obj.data, "size"):
             obj.data.size = item["size"]
-        obj.location = Vector(item["location"])
-        obj.rotation_euler = tuple(math.radians(a) for a in item["rotation_euler_deg"])
+        # Оси в camera.json заданы в системе рендера (Y вверх), у Blender Z вверх.
+        obj.location = Vector(to_blender(item["location"]))
+        aim(obj, to_blender(item.get("target", [0.0, 0.7, 0.0])))
+
+
+def to_blender(xyz):
+    """(x, y, z) системы рендера -> (x, -z, y) системы Blender."""
+    x, y, z = xyz
+    return (x, -z, y)
+
+
+def aim(obj, target):
+    """Развернуть лампу на точку: -Z лампы смотрит в цель."""
+    direction = Vector(target) - obj.location
+    obj.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
 
 
 def car_collections(car_id):

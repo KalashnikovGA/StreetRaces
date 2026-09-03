@@ -48,6 +48,9 @@ if (!existsSync(input)) {
 
 const cellIndex = rest.indexOf('--cell');
 const cell = cellIndex >= 0 ? rest[cellIndex + 1] : '0.018';
+/** Сколько раз усреднить нормали кузова. 0 — не трогать. */
+const smoothIndex = rest.indexOf('--smooth');
+const smooth = smoothIndex >= 0 ? rest[smoothIndex + 1] : '2';
 /** --dry печатает разбор материалов по слоям и ничего не пишет на диск. */
 const dry = rest.includes('--dry');
 const output = `assets/models/${carId}.glb`;
@@ -90,6 +93,7 @@ const GROUPS = [
 
 const LENGTH_M = 4.6;
 const CELL = Number(new URLSearchParams(location.search).get('cell'));
+const SMOOTH = Number(new URLSearchParams(location.search).get('smooth'));
 
 window.done = null;
 
@@ -171,6 +175,87 @@ function cluster(geometry, cell) {
   return out;
 }
 
+/**
+ * Сглаживание затенения слоя. Двигаются только нормали — позиции остаются
+ * на месте, поэтому силуэт, складки и подштамповки никуда не деваются,
+ * меняется лишь то, как по ним ложится свет.
+ *
+ * Два шага:
+ *
+ * 1. Сварка по положению. У стыка панелей — дверь и крыло, порог и юбка —
+ *    вершины принадлежат разным мешам, нормали у них разные, и на рендере
+ *    шов читается жёсткой границей, почти как царапина. Общая нормаль
+ *    на общую точку эту границу убирает.
+ * 2. Лапласиан по рёбрам: нормаль подтягивается к среднему по соседям.
+ *    Убирает мелкую рябь, оставшуюся от децимации. Больше двух-трёх
+ *    проходов уже слизывает бортовую линию, поэтому число — параметр.
+ */
+function smoothNormals(geometry, weld, iterations) {
+  const pos = geometry.getAttribute('position');
+  const nor = geometry.getAttribute('normal');
+  const index = geometry.getIndex();
+  if (!nor || !index) return geometry;
+
+  const count = pos.count;
+  const slotOf = new Int32Array(count);
+  const map = new Map();
+  let slots = 0;
+  for (let i = 0; i < count; i++) {
+    const key = Math.round(pos.getX(i) / weld) + ',' +
+                Math.round(pos.getY(i) / weld) + ',' +
+                Math.round(pos.getZ(i) / weld);
+    let slot = map.get(key);
+    if (slot === undefined) { slot = slots++; map.set(key, slot); }
+    slotOf[i] = slot;
+  }
+
+  let nx = new Float32Array(slots), ny = new Float32Array(slots), nz = new Float32Array(slots);
+  for (let i = 0; i < count; i++) {
+    const s = slotOf[i];
+    nx[s] += nor.getX(i); ny[s] += nor.getY(i); nz[s] += nor.getZ(i);
+  }
+  const unit = (x, y, z) => { const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; };
+  for (let s = 0; s < slots; s++) {
+    const [x, y, z] = unit(nx[s], ny[s], nz[s]);
+    nx[s] = x; ny[s] = y; nz[s] = z;
+  }
+
+  if (iterations > 0) {
+    // Соседи по рёбрам треугольников, уже в сваренных точках.
+    const neighbours = Array.from({ length: slots }, () => new Set());
+    for (let i = 0; i < index.count; i += 3) {
+      const a = slotOf[index.getX(i)], b = slotOf[index.getX(i + 1)], c = slotOf[index.getX(i + 2)];
+      neighbours[a].add(b); neighbours[a].add(c);
+      neighbours[b].add(a); neighbours[b].add(c);
+      neighbours[c].add(a); neighbours[c].add(b);
+    }
+    const LAMBDA = 0.5;
+    for (let pass = 0; pass < iterations; pass++) {
+      const ox = new Float32Array(slots), oy = new Float32Array(slots), oz = new Float32Array(slots);
+      for (let s = 0; s < slots; s++) {
+        let sx = 0, sy = 0, sz = 0, n = 0;
+        for (const j of neighbours[s]) { sx += nx[j]; sy += ny[j]; sz += nz[j]; n++; }
+        if (n === 0) { ox[s] = nx[s]; oy[s] = ny[s]; oz[s] = nz[s]; continue; }
+        const [x, y, z] = unit(
+          nx[s] + LAMBDA * (sx / n - nx[s]),
+          ny[s] + LAMBDA * (sy / n - ny[s]),
+          nz[s] + LAMBDA * (sz / n - nz[s]),
+        );
+        ox[s] = x; oy[s] = y; oz[s] = z;
+      }
+      nx = ox; ny = oy; nz = oz;
+    }
+  }
+
+  const out = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const s = slotOf[i];
+    out[i * 3] = nx[s]; out[i * 3 + 1] = ny[s]; out[i * 3 + 2] = nz[s];
+  }
+  geometry.setAttribute('normal', new Float32BufferAttribute(out, 3));
+  return geometry;
+}
+
 const LOOK = {
   body: { color: 0xffffff, roughness: 0.42, metalness: 0.15 },
   glass: { color: 0x20262b, roughness: 0.15, metalness: 0, transparent: true, opacity: 0.55 },
@@ -246,9 +331,13 @@ new GLTFLoader().load('/car.glb', (gltf) => {
       const tris = geometry.getAttribute('position').count / 3;
       return ready(tris <= KEEP_WHOLE ? geometry : cluster(geometry, cellUnits));
     });
+    const geometry = BufferGeometryUtils.mergeGeometries(pieces, false);
+    // Сглаживается только кузов: у стекла, фар и колёс своих швов нет,
+    // а сварка нормалей колеса с кузовом была бы просто ошибкой.
+    if (name === 'body') smoothNormals(geometry, cellUnits * 0.4, SMOOTH);
     merged.set(name, {
       before: list.reduce((sum, g) => sum + g.getAttribute('position').count / 3, 0),
-      geometry: BufferGeometryUtils.mergeGeometries(pieces, false),
+      geometry,
     });
   }
 
@@ -335,7 +424,7 @@ const browser = await chromium.launch(
 const page = await browser.newPage();
 page.on('pageerror', (error) => console.error('ошибка страницы:', error.message));
 
-await page.goto(`http://localhost:${port}/?cell=${cell}`);
+await page.goto(`http://localhost:${port}/?cell=${cell}&smooth=${smooth}`);
 await page.waitForFunction(() => window.done !== null, null, { timeout: 300_000 });
 const result = await page.evaluate(() => window.done);
 await browser.close();
