@@ -300,6 +300,32 @@ function cullMiddle(geometry, alongX, middle, span, minOffset) {
 }
 
 /**
+ * Разделить треугольники по высоте: inside — то, что ниже уровня.
+ */
+function splitByHeight(geometry, level) {
+  const pos = geometry.getAttribute('position');
+  const nor = geometry.getAttribute('normal');
+  const halves = [[[], []], [[], []]];
+  for (let i = 0; i < pos.count; i += 3) {
+    const c = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
+    const [verts, norms] = halves[c < level ? 0 : 1];
+    for (let k = 0; k < 3; k++) {
+      verts.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
+      if (nor) norms.push(nor.getX(i + k), nor.getY(i + k), nor.getZ(i + k));
+    }
+  }
+  const build = ([verts, norms]) => {
+    if (verts.length === 0) return null;
+    const out = new BufferGeometry();
+    out.setAttribute('position', new Float32BufferAttribute(verts, 3));
+    if (norms.length) out.setAttribute('normal', new Float32BufferAttribute(norms, 3));
+    out.computeBoundingBox();
+    return out;
+  };
+  return { inside: build(halves[0]), outside: build(halves[1]) };
+}
+
+/**
  * Разделить треугольники по половине машины: wantFront — та половина,
  * куда смотрит нос. Возвращает { inside, outside }; пустая половина — null.
  */
@@ -402,7 +428,7 @@ const LOOK = {
   // Без неё покрышка при шероховатости 0.85 — ровное чёрное кольцо.
   // На 0.6 по боковине идёт блик от окружения, и она становится круглой.
   tyre: { color: 0x17191c, roughness: 0.72, metalness: 0.02 },
-  rim: { color: 0xb4b9c0, roughness: 0.4, metalness: 0.2 },
+  rim: { color: 0xb9bec6, roughness: 0.28, metalness: 0.42 },
   wheel: { color: 0x1a1c1e, roughness: 0.55, metalness: 0 },
   light: { color: 0xf0dcc0, roughness: 0.25, metalness: 0 },
   tail: { color: 0xc04a35, roughness: 0.3, metalness: 0 },
@@ -599,6 +625,26 @@ new GLTFLoader().load('/car.glb', (gltf) => {
       for (const geometry of chrome) {
         const { inside, outside } = splitByCells(geometry, cells, lampCell);
         if (inside) buckets.get('body').push(inside);
+        if (outside) keep.push(outside);
+      }
+      buckets.set('chrome', keep);
+    }
+
+    /**
+     * Хром под днищем — не хром.
+     *
+     * Банка глушителя и патрубки сидят в том же материале, что молдинги
+     * окон, и выходили светлым слитком под бампером: сбоку он читался
+     * отдельно стоящей деталью, а не частью машины. Под днищем блестеть
+     * нечему — там тень. Всё хромовое ниже пятой части высоты уходит
+     * в тёмную накладку.
+     */
+    const lowChrome = whole.min.y + rawSize.y * 0.2;
+    if (buckets.get('chrome')?.length && buckets.get('trim')) {
+      const keep = [];
+      for (const geometry of buckets.get('chrome')) {
+        const { inside, outside } = splitByHeight(geometry, lowChrome);
+        if (inside) buckets.get('trim').push(inside);
         if (outside) keep.push(outside);
       }
       buckets.set('chrome', keep);

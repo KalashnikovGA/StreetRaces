@@ -742,11 +742,11 @@ async function renderCar(root) {
 
   show(['light']);
   shoot();
-  // Фара размывается сильнее прочих деталей. Строго сбоку стекло стоит
-  // к камере ребром: на кадре от него остаётся узкая полоса, сходящая
-  // на нет острым концом. Резкий край такой полосы читается не фарой,
-  // а клином, воткнутым в крыло, — половина пикселя размытия его скругляет.
-  sheets.light = flatten(grab(), { blur: px(0.0018), levels: null });
+  // Раньше фара размывалась вчетверо сильнее прочих деталей: у прежней
+  // машины стекло стояло к камере ребром, и резкий край читался клином,
+  // воткнутым в крыло. У фары, повёрнутой к камере лицом, это лишнее —
+  // от такого размытия она становится мыльным пятном.
+  sheets.light = flatten(grab(), { blur: px(0.0004), levels: null });
 
   show(['tail']);
   shoot();
@@ -948,9 +948,9 @@ async function renderCar(root) {
    * ни на что, кроме чёткости, не влияет: незыблемое правило про общий
    * кадр библиотеки не нарушено.
    */
-  // Колесо снимается с запасом, но не вдвое: на двух оно выходило заметно
-  // резче кузова, и машина рядом с ним казалась мыльной.
-  const WHEEL_SS = 1.6;
+  // Колесо снимается с двойным запасом: спицы и боковина — самая мелкая
+  // деталь машины, и на кадре они стоят на считанных пикселях.
+  const WHEEL_SS = 2;
   show(['wheel', 'tyre', 'rim']);
   renderer.render(scene, camera);
   {
@@ -961,7 +961,7 @@ async function renderCar(root) {
     // Фильтр восстановления берётся вполсилы: он рассчитан на ужимание втрое,
     // а колесо ужимается всего в полтора раза — на полной ширине спицы
     // и болты уходили бы в мыло.
-    rawCtx.filter = FILTER > 1.5 ? 'blur(' + (FILTER * SS / 6).toFixed(2) + 'px)' : 'none';
+    rawCtx.filter = FILTER > 1.5 ? 'blur(' + (FILTER * SS / 8).toFixed(2) + 'px)' : 'none';
     rawCtx.drawImage(renderer.domElement, src.x, src.y, src.side, src.side, 0, 0, src.side, src.side);
     rawCtx.filter = 'none';
 
@@ -971,7 +971,7 @@ async function renderCar(root) {
     const hiCtx = hi.getContext('2d');
     hiCtx.imageSmoothingQuality = 'high';
     hiCtx.drawImage(raw, 0, 0, side, side);
-    out.wheel = flatten(hi, { blur: px(0.0002) * WHEEL_SS, levels: null }).toDataURL('image/png');
+    out.wheel = flatten(hi, { blur: px(0.0001) * WHEEL_SS, levels: null }).toDataURL('image/png');
   }
 
   window.done = {

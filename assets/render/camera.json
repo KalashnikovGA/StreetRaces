@@ -122,7 +122,7 @@
   "color_management": {
     "view_transform": "AgX",
     "look": "Medium Low Contrast",
-    "exposure": 0.0,
+    "exposure": 0.3,
     "_": "Standard — это отсутствие тональной кривой: светА выбиваются в чистый белый, и деталь пропадает. AgX (Blender 4.x) держит плечо и не даёт бликам слипнуться. В three.js эквивалент — renderer.toneMapping = AgXToneMapping."
   },
   "body": {
@@ -132,7 +132,7 @@
     "_roughness": "0.3 — лак, который ещё отражает окружение, но уже не зеркало. На 0.6 борт был матовым, отражения размывались в ничто, и дверь с крылом сливались в одну заливку: форму строго сбоку рисует именно отражение светлого верха и тёмного низа."
   },
   "environment": {
-    "intensity": 1.25,
+    "intensity": 1.35,
     "stops": [
       [0.0, "#14181d"],
       [0.3, "#39424a"],
@@ -150,7 +150,7 @@
     "body_blur": 0.00015,
     "gloss_blur": 0.0012,
     "seams": {
-      "strength": 0.2,
+      "strength": 0,
       "step": 0.0007,
       "angle_min_deg": 40,
       "angle_full_deg": 70,
