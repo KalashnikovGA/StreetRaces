@@ -85,10 +85,11 @@ const DROP = /badge|emblem|logo|plate_d|nameplate|manufacturerplate|\\bint_|inte
  */
 const GROUPS = [
   ['tail', /\\btl_|taillight|tail_?lamp|red_?glass/i],
-  ['light', /\\bhl_|light|lamp|headlamp/i],
-  // Рассеиватель фары — тоже стекло: у него свой материал, и без правила
-  // он выпадал в неопознанные, оставляя фару без переднего стекла.
-  ['glass', /glass|window|windscreen|windshield|glazing|lens/i],
+  // Рассеиватель фары идёт к фарам, а не к стёклам: остекление тёмное,
+  // и вместе с ним чернела фара. Материал у рассеивателя свой, поэтому
+  // развести их можно правилом.
+  ['light', /\\bhl_|light|lamp|headlamp|lens/i],
+  ['glass', /glass|window|windscreen|windshield|glazing/i],
   ['tyre', /tyre|tire/i],
   ['rim', /_rim|\\brim|spoke|\\bhub|calliper|caliper|brake|disc|bolt/i],
   ['wheel', /wheel/i],
@@ -299,10 +300,40 @@ function cullMiddle(geometry, alongX, middle, span, minOffset) {
 }
 
 /**
+ * Разделить треугольники по половине машины: wantFront — та половина,
+ * куда смотрит нос. Возвращает { inside, outside }; пустая половина — null.
+ */
+function splitByHalf(geometry, alongX, middle, nose, wantFront) {
+  const pos = geometry.getAttribute('position');
+  const nor = geometry.getAttribute('normal');
+  const halves = [[[], []], [[], []]];
+  for (let i = 0; i < pos.count; i += 3) {
+    const c = (alongX
+      ? (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2))
+      : (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2))) / 3;
+    const atFront = (c - middle) * nose > 0;
+    const [verts, norms] = halves[atFront === wantFront ? 0 : 1];
+    for (let k = 0; k < 3; k++) {
+      verts.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
+      if (nor) norms.push(nor.getX(i + k), nor.getY(i + k), nor.getZ(i + k));
+    }
+  }
+  const build = ([verts, norms]) => {
+    if (verts.length === 0) return null;
+    const out = new BufferGeometry();
+    out.setAttribute('position', new Float32BufferAttribute(verts, 3));
+    if (norms.length) out.setAttribute('normal', new Float32BufferAttribute(norms, 3));
+    out.computeBoundingBox();
+    return out;
+  };
+  return { inside: build(halves[0]), outside: build(halves[1]) };
+}
+
+/**
  * Занять решётку треугольниками: ключ ячейки -> есть/нет. Нужно, чтобы
  * спросить «а лежит ли этот треугольник там же, где лампа».
  */
-function occupy(list, cell) {
+function occupy(list, cell, ring) {
   const cells = new Set();
   for (const geometry of list) {
     const pos = geometry.getAttribute('position');
@@ -312,9 +343,9 @@ function occupy(list, cell) {
       const gz = Math.floor(pos.getZ(i) / cell);
       // Ячейка и её соседи: окантовка блока лежит впритык к стеклу,
       // но своих вершин с ним не делит.
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        for (let dy = -ring; dy <= ring; dy++) {
+          for (let dz = -ring; dz <= ring; dz++) {
             cells.add((gx + dx) + ',' + (gy + dy) + ',' + (gz + dz));
           }
         }
@@ -364,11 +395,13 @@ const LOOK = {
   // Стекло непрозрачное. Прозрачность нужна была салону, а салон
   // из модели выброшен; зато сквозь неё просвечивало зеркало заднего вида —
   // его стекло сидит в том же материале, и сбоку зеркало выходило призраком.
-  // Стекло светлое и холодное, а не чёрное: сбоку в окне видно небо,
-  // а не салон. На тёмном кузове чёрное стекло сливалось с крышей,
-  // и от остекления оставался один силуэт.
-  glass: { color: 0x6d8798, roughness: 0.06, metalness: 0.1 },
-  tyre: { color: 0x141618, roughness: 0.85, metalness: 0 },
+  // Стекло тёмное, но не чёрное: при нулевой шероховатости оно ловит
+  // отражение софтбокса, и окно читается стеклом, а не дырой в кузове.
+  glass: { color: 0x23282d, roughness: 0.04, metalness: 0.2 },
+  // Резина в исходнике держалась на текстуре, а текстуры мы выбрасываем.
+  // Без неё покрышка при шероховатости 0.85 — ровное чёрное кольцо.
+  // На 0.6 по боковине идёт блик от окружения, и она становится круглой.
+  tyre: { color: 0x17191c, roughness: 0.72, metalness: 0.02 },
   rim: { color: 0xb4b9c0, roughness: 0.4, metalness: 0.2 },
   wheel: { color: 0x1a1c1e, roughness: 0.55, metalness: 0 },
   light: { color: 0xf0dcc0, roughness: 0.25, metalness: 0 },
@@ -499,6 +532,51 @@ new GLTFLoader().load('/car.glb', (gltf) => {
   }
 
   /**
+   * Красное — только сзади.
+   *
+   * Авторы вешают один материал «отражатель фонаря» и на задние фонари,
+   * и на передние повторители, а один материал «рассеиватель» — и на фару,
+   * и на фонарь. В итоге у машины спереди поперёк фары лежит красное пятно,
+   * а сзади фонарь выходит белым.
+   *
+   * Разводим по месту, а не по имени: где перёд, а где корма, говорит сама
+   * модель — центр тяжести фар лежит спереди, центр тяжести фонарей сзади.
+   * Всё «фонарное» на передней половине уезжает в фары, всё «фарное»
+   * на задней — в фонари.
+   */
+  {
+    const alongLamp = rawSize.x >= rawSize.z;
+    const middle = whole.getCenter(new Vector3());
+    const mid = alongLamp ? middle.x : middle.z;
+    const centreOf = (list) => {
+      if (!list?.length) return null;
+      let sum = 0, n = 0;
+      for (const geometry of list) {
+        const c = geometry.boundingBox.getCenter(new Vector3());
+        sum += alongLamp ? c.x : c.z; n++;
+      }
+      return sum / n;
+    };
+    const front = centreOf(buckets.get('light'));
+    const back = centreOf(buckets.get('tail'));
+    if (front !== null && back !== null && front !== back) {
+      // +1, если нос смотрит в плюс оси; -1, если в минус.
+      const nose = front > back ? 1 : -1;
+      const move = (from, to, wantFront) => {
+        const keep = [];
+        for (const geometry of buckets.get(from) ?? []) {
+          const { inside, outside } = splitByHalf(geometry, alongLamp, mid, nose, wantFront);
+          if (inside) buckets.get(to).push(inside);
+          if (outside) keep.push(outside);
+        }
+        buckets.set(from, keep);
+      };
+      move('tail', 'light', true);
+      move('light', 'tail', false);
+    }
+  }
+
+  /**
    * Отражатель фары — не хром, а внутренность блока.
    *
    * У сборок весь хром сидит в одном материале: молдинги, зеркало, патрубки
@@ -516,7 +594,7 @@ new GLTFLoader().load('/car.glb', (gltf) => {
     const lamps = [...(buckets.get('light') ?? []), ...(buckets.get('tail') ?? [])];
     const chrome = buckets.get('chrome');
     if (lamps.length && chrome?.length && buckets.get('body')) {
-      const cells = occupy(lamps, lampCell);
+      const cells = occupy(lamps, lampCell, 1);
       const keep = [];
       for (const geometry of chrome) {
         const { inside, outside } = splitByCells(geometry, cells, lampCell);
@@ -524,6 +602,28 @@ new GLTFLoader().load('/car.glb', (gltf) => {
         if (outside) keep.push(outside);
       }
       buckets.set('chrome', keep);
+    }
+
+    /**
+     * Внутренность блока фары — не кузов.
+     *
+     * Чаша фары у этой сборки сделана из того же «пластика», что бампера,
+     * а бампера у машины крашеные, поэтому пластик уезжает в кузов. В итоге
+     * поперёк фары ложилось красное пятно: сквозь стекло видно окрашенную
+     * чашу. Всё кузовное внутри блока лампы уходит в тёмную накладку —
+     * там ему и место, а заодно темнеет тонкое кольцо уплотнителя вокруг
+     * стекла, что тоже правильно.
+     */
+    const body = buckets.get('body');
+    if (lamps.length && body?.length && buckets.get('trim')) {
+      const tight = occupy(lamps, lampCell, 0);
+      const keep = [];
+      for (const geometry of body) {
+        const { inside, outside } = splitByCells(geometry, tight, lampCell);
+        if (inside) buckets.get('trim').push(inside);
+        if (outside) keep.push(outside);
+      }
+      buckets.set('body', keep);
     }
   }
 
