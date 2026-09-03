@@ -78,10 +78,10 @@ const PAGE = `<!doctype html>
 <script type="module">
 import {
   AgXToneMapping, AmbientLight, Box3, HemisphereLight, LinearSRGBColorSpace, Mesh,
-  MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, MeshPhysicalMaterial,
-  MeshStandardMaterial, NoToneMapping, OrthographicCamera, PerspectiveCamera,
-  RGBADepthPacking, RectAreaLight, Scene, SRGBColorSpace, Vector3, WebGLRenderer,
-  WebGLRenderTarget,
+  CanvasTexture, EquirectangularReflectionMapping, MeshBasicMaterial,
+  MeshDepthMaterial, MeshNormalMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
+  NoToneMapping, OrthographicCamera, PerspectiveCamera, RGBADepthPacking,
+  RectAreaLight, Scene, SRGBColorSpace, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
@@ -174,15 +174,49 @@ for (const item of CONFIG.lights) {
   scene.add(light);
 }
 /**
- * Полусферический свет: сверху небо, снизу земля. На фотографии машины
- * бортовую линию и подштамповки рисует именно это — отражение светлого верха
- * и тёмного низа, а не диффузное затенение. Без него плоская дверь освещена
- * ровно и после умножения на цвет становится пятном.
+ * Полусферический свет: сверху небо, снизу земля. Диффузная часть того же,
+ * что делает окружение ниже, — нужна тем деталям, которые не блестят.
  */
-scene.add(new HemisphereLight(0xdfe8f0, 0x0e1012, 0.30 * KEY));
+scene.add(new HemisphereLight(0xdfe8f0, 0x0e1012, 0.22 * KEY));
 
 // Общего света ровно столько, чтобы тень не проваливалась в чёрное.
-scene.add(new AmbientLight(0xffffff, 0.06));
+scene.add(new AmbientLight(0xffffff, 0.05));
+
+/**
+ * Окружение — то, ради чего всё это.
+ *
+ * Строго сбоку машина повёрнута к камере одним боком, и нормаль по нему
+ * почти не меняется: рассеянного света хватает на силуэт, но форму он
+ * не показывает — дверь, крыло и порог сливаются в одну заливку. Форму
+ * на фотографии рисует не свет, а **отражение**: борт зеркалит светлый
+ * верх и тёмный низ, граница между ними ложится вдоль бортовой линии,
+ * и каждая выпуклость гнёт эту границу по-своему. Отсюда и объём.
+ *
+ * Поэтому вместо контурного слоя (§68 — от него отказались, он читался
+ * чертежом поверх машины) в сцену кладётся градиентное окружение: узкая
+ * яркая полоса софтбокса под потолком, ровное небо над горизонтом, тёмный
+ * пол под ним. Кузов достаточно гладкий, чтобы это отражать.
+ */
+{
+  const spec = CONFIG.environment ?? {};
+  const stops = spec.stops ?? [
+    [0.00, '#12161a'], [0.34, '#2a3138'], [0.40, '#f2f6fa'],
+    [0.47, '#8f9aa4'], [0.62, '#5b656e'], [0.63, '#20262b'], [1.00, '#0a0d10'],
+  ];
+  const sky = document.createElement('canvas');
+  sky.width = 8; sky.height = 512;
+  const g = sky.getContext('2d');
+  const ramp = g.createLinearGradient(0, 0, 0, sky.height);
+  for (const [at, color] of stops) ramp.addColorStop(at, color);
+  g.fillStyle = ramp;
+  g.fillRect(0, 0, sky.width, sky.height);
+
+  const env = new CanvasTexture(sky);
+  env.mapping = EquirectangularReflectionMapping;
+  env.colorSpace = SRGBColorSpace;
+  scene.environment = env;
+  scene.environmentIntensity = spec.intensity ?? 1;
+}
 
 const readback = document.createElement('canvas');
 readback.width = W; readback.height = H;
