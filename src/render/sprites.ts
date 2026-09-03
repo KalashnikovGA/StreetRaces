@@ -10,7 +10,7 @@
  */
 
 export type CarLayer =
-  | 'body' | 'shade' | 'trim' | 'chrome' | 'glass' | 'light' | 'tail' | 'edge' | 'wheel';
+  | 'body' | 'shade' | 'trim' | 'chrome' | 'glass' | 'light' | 'tail' | 'wheel';
 
 export interface WheelAnchor {
   cx: number;
@@ -34,7 +34,7 @@ export interface CarSprites {
 }
 
 const LAYERS: CarLayer[] = [
-  'body', 'shade', 'trim', 'chrome', 'glass', 'light', 'tail', 'edge', 'wheel',
+  'body', 'shade', 'trim', 'chrome', 'glass', 'light', 'tail', 'wheel',
 ];
 
 /**

@@ -179,11 +179,6 @@ function drawSpriteCar(
   ctx.drawImage(images.light, dx, dy, frameW, frameH);
   ctx.drawImage(images.tail, dx, dy, frameW, frameH);
 
-  // Контурная линия. В рисованной подаче форму держит она, а не затенение:
-  // силуэт, проёмы дверей, арки, стык капота. Колесо в этот слой не входит —
-  // оно крутится, и его контур запечён в сам спрайт колеса.
-  ctx.drawImage(images.edge, dx, dy, frameW, frameH);
-
   // Стоп-сигнал: тот же слой фонарей, добавленный сложением.
   if (options.braking) {
     ctx.globalCompositeOperation = 'lighter';

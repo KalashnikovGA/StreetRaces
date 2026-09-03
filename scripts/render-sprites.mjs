@@ -358,8 +358,15 @@ async function renderCar(root) {
   // спрайты разных машин нельзя сравнить между собой.
   const half = CONFIG.camera.ortho_scale / 2;
   const dist = length * 4;
-  const depthRange = dist * 4;
-  camera = new OrthographicCamera(-half, half, half * H / W, -half * H / W, 0.01, depthRange);
+  // Ближняя и дальняя плоскости обжимают машину вплотную. Диапазон в десятки
+  // метров на объект в один метр съедает точность буфера глубины, и две почти
+  // совпадающие поверхности — обвес поверх стокового кузова — начинают спорить
+  // за пиксель. На рендере это тёмные пятна по двери и крылу.
+  const margin = Math.max(size.y, size.z) * 0.6 + 0.2;
+  camera = new OrthographicCamera(
+    -half, half, half * H / W, -half * H / W,
+    dist - margin, dist + margin,
+  );
   // Нос модели смотрит в +X, значит камера встаёт на +Z: тогда на экране
   // машина едет вправо, как и рисовалась вектором.
   camera.position.set(centre.x, centre.y, centre.z + dist);
