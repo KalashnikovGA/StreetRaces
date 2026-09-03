@@ -87,8 +87,14 @@ const GROUPS = [
   ['tail', /\\btl_|taillight|tail_?lamp|red_?glass/i],
   ['light', /\\bhl_|light|lamp|headlamp/i],
   ['glass', /glass|window|windscreen|windshield|glazing/i],
-  ['wheel', /wheel|tyre|tire|_rim|\\brim|calliper|caliper|brake|disc/i],
-  ['body', /paint|body|chassis|plastic|black|chrome|exhaust|mirror|coloured|colored|base|carbon|grille|kit|panel|trim|material/i],
+  ['tyre', /tyre|tire/i],
+  ['rim', /_rim|\\brim|spoke|\\bhub|calliper|caliper|brake|disc|bolt/i],
+  ['wheel', /wheel/i],
+  ['chrome', /chrome/i],
+  // Пластик бывает и крылом: у Evo широкие панели пластиковые, но крашеные.
+  // В trim идёт только заведомо нецветное — чёрное, решётки, зеркала, хром.
+  ['trim', /grille|grill|mirror|exhaust|carbon|rubber|vent|molding|moulding|_black|\\bblack|\\btrim/i],
+  ['body', /paint|body|chassis|plastic|coloured|colored|base|kit|panel|material/i],
 ];
 
 const LENGTH_M = 4.6;
@@ -256,9 +262,19 @@ function smoothNormals(geometry, weld, iterations) {
   return geometry;
 }
 
+/**
+ * Слои с собственным цветом. Красится только body — остальное и делает
+ * машину машиной: чёрные окантовки окон, решётки, зеркало, бампера, хромовые
+ * молдинги, светлый диск на тёмной резине. Свали их в кузов, и от машины
+ * останется одно цветное пятно.
+ */
 const LOOK = {
   body: { color: 0xffffff, roughness: 0.42, metalness: 0.15 },
+  trim: { color: 0x24262a, roughness: 0.62, metalness: 0.0 },
+  chrome: { color: 0xd6dae0, roughness: 0.18, metalness: 0.9 },
   glass: { color: 0x20262b, roughness: 0.15, metalness: 0, transparent: true, opacity: 0.55 },
+  tyre: { color: 0x141618, roughness: 0.85, metalness: 0 },
+  rim: { color: 0x9aa0a8, roughness: 0.35, metalness: 0.7 },
   wheel: { color: 0x1a1c1e, roughness: 0.55, metalness: 0 },
   light: { color: 0xf0dcc0, roughness: 0.25, metalness: 0 },
   tail: { color: 0xc04a35, roughness: 0.3, metalness: 0 },
@@ -305,6 +321,34 @@ new GLTFLoader().load('/car.glb', (gltf) => {
   const cellUnits = CELL * (Math.max(rawSize.x, rawSize.z) / LENGTH_M);
 
   /**
+   * Крупная панель — это кузов, а не накладка.
+   *
+   * Авторы моделей вешают «чёрный пластик» и на окантовку окна, и на всё
+   * переднее крыло разом. Первое красить нельзя, второе — нужно, иначе
+   * у машины одно крыло чёрное, а другое в цвет. Разбираем по площади
+   * в виде сбоку: накладка занимает считанные проценты, панель — десятки.
+   */
+  const alongXRaw = rawSize.x >= rawSize.z;
+  const sideArea = (box) => {
+    const size = box.getSize(new Vector3());
+    return (alongXRaw ? size.x : size.z) * size.y;
+  };
+  const wholeSide = (alongXRaw ? rawSize.x : rawSize.z) * rawSize.y;
+  const PANEL_SHARE = 0.08;
+
+  if (buckets.get('trim')?.length && buckets.get('body')) {
+    const keep = [];
+    for (const geometry of buckets.get('trim')) {
+      if (sideArea(geometry.boundingBox) > wholeSide * PANEL_SHARE) {
+        buckets.get('body').push(geometry);
+      } else {
+        keep.push(geometry);
+      }
+    }
+    buckets.set('trim', keep);
+  }
+
+  /**
    * Решётка накладывается на каждый исходный меш отдельно, а не на слитый слой.
    * Иначе соседние панели — дверь и крыло, порог и юбка — свариваются в одну
    * вершину, и по стыкам расходятся щели. Именно они и читаются как царапины.
@@ -334,7 +378,7 @@ new GLTFLoader().load('/car.glb', (gltf) => {
     const geometry = BufferGeometryUtils.mergeGeometries(pieces, false);
     // Сглаживается только кузов: у стекла, фар и колёс своих швов нет,
     // а сварка нормалей колеса с кузовом была бы просто ошибкой.
-    if (name === 'body') smoothNormals(geometry, cellUnits * 0.4, SMOOTH);
+    if (name === 'body' || name === 'trim') smoothNormals(geometry, cellUnits * 0.4, SMOOTH);
     merged.set(name, {
       before: list.reduce((sum, g) => sum + g.getAttribute('position').count / 3, 0),
       geometry,

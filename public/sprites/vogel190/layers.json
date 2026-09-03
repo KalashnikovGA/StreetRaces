@@ -27,6 +27,8 @@
   "order": [
     "body",
     "shade",
+    "trim",
+    "chrome",
     "glass",
     "light",
     "tail",

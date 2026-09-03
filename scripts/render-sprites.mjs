@@ -74,7 +74,7 @@ const PAGE = `<!doctype html>
 <script type="module">
 import {
   AgXToneMapping, AmbientLight, Box3, HemisphereLight, LinearSRGBColorSpace, Mesh,
-  MeshNormalMaterial, MeshPhysicalMaterial, MeshStandardMaterial, NoToneMapping,
+  MeshBasicMaterial, MeshNormalMaterial, MeshPhysicalMaterial, MeshStandardMaterial, NoToneMapping,
   OrthographicCamera, RectAreaLight, Scene, SRGBColorSpace, Vector3,
   WebGLRenderer, WebGLRenderTarget,
 } from 'three';
@@ -476,12 +476,16 @@ new GLTFLoader().load('/source.glb', async (gltf) => {
 // ── машина ───────────────────────────────────────────────────────────────────
 
 async function renderCar(root) {
-  const groups = { body: [], glass: [], light: [], tail: [], wheel: [] };
+  const groups = {
+    body: [], trim: [], chrome: [], glass: [], light: [], tail: [],
+    wheel: [], tyre: [], rim: [],
+  };
   // Подготовленные модели приходят с именами слоёв, процедурные плейсхолдеры
   // из build-car-models.mjs — со своими. Приводим к одному словарю.
   const ALIAS = {
-    body: 'body', glass: 'glass', light: 'light', tail: 'tail', wheel: 'wheel',
-    tire: 'wheel', rim: 'wheel', headlight: 'light', taillight: 'tail',
+    body: 'body', trim: 'trim', chrome: 'chrome', glass: 'glass',
+    light: 'light', tail: 'tail', wheel: 'wheel', tyre: 'tyre', rim: 'rim',
+    tire: 'tyre', headlight: 'light', taillight: 'tail',
   };
   root.traverse((node) => {
     if (!node.isMesh) return;
@@ -507,9 +511,37 @@ async function renderCar(root) {
   camera.up.set(0, 1, 0);
   camera.lookAt(centre.x, centre.y, centre.z);
 
-  const show = (names) => {
+  const original = new Map();
+  for (const list of Object.values(groups)) {
+    for (const node of list) original.set(node, node.material);
+  }
+
+  /**
+   * Только названные слои — остальное скрыто совсем. Нужно контуру: силуэт
+   * кузова не должен зависеть от того, что перед ним стоит колесо.
+   */
+  const only = (names) => {
     for (const [key, list] of Object.entries(groups)) {
       for (const node of list) node.visible = names.includes(key);
+    }
+  };
+
+  /**
+   * Названные слои видны, остальные работают заслонкой: пишут глубину,
+   * но не цвет.
+   *
+   * Без этого деталь с дальней стороны машины — зеркало, воздуховод,
+   * противоположный порог — попадала в кадр поверх кузова: слой снимается
+   * отдельно, заслонять её нечем, и на двери появлялось чёрное пятно.
+   */
+  const maskMat = new MeshBasicMaterial({ colorWrite: false });
+  const show = (names) => {
+    for (const [key, list] of Object.entries(groups)) {
+      const wanted = names.includes(key);
+      for (const node of list) {
+        node.visible = true;
+        node.material = wanted ? original.get(node) : maskMat;
+      }
     }
   };
 
@@ -534,10 +566,6 @@ async function renderCar(root) {
   });
   const normalMat = new MeshNormalMaterial();
   const maskBuf = new Uint8Array(RAW_W * RAW_H * 4);
-  const original = new Map();
-  for (const list of Object.values(groups)) {
-    for (const node of list) original.set(node, node.material);
-  }
 
   const out = {};
 
@@ -575,7 +603,7 @@ async function renderCar(root) {
   const smoothRadius = Math.max(1, Math.round((STYLE.edge_smooth_px ?? 1.4) * SS / 2));
 
   const outlineFor = (names, widthPx) => {
-    show(names);
+    only(names);
     swapAll(normalMat);
     const alpha = shootRaw(maskBuf);
     restoreAll();
@@ -620,6 +648,19 @@ async function renderCar(root) {
     levels: STYLE.gloss_levels ?? [0.0, 0.85],
   }).toDataURL('image/png');
   swap(groups.body, original.get(groups.body[0]));
+
+  show(['glass']);
+  shoot();
+  // Слои с собственным цветом. Красится только кузов; чёрные окантовки,
+  // решётки, зеркало и бампера остаются чёрными, хром — светлым. Из них
+  // и складывается детализация, которой не даёт ни одна линия.
+  show(['trim']);
+  shoot();
+  out.trim = flatten(grab(), { blur: px(0.0015), levels: [0.10, 0.22, 0.42] }).toDataURL('image/png');
+
+  show(['chrome']);
+  shoot();
+  out.chrome = flatten(grab(), { blur: px(0.0015), levels: [0.45, 0.72, 1.0] }).toDataURL('image/png');
 
   show(['glass']);
   shoot();
@@ -680,22 +721,25 @@ async function renderCar(root) {
     { mask: outlineFor(['glass'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha },
     { mask: outlineFor(['light'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha },
     { mask: outlineFor(['tail'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha },
-    { mask: outlineFor(['body'], STYLE.edge_outline_px ?? 2.6), alpha: outlineAlpha },
+    { mask: outlineFor(['body', 'trim', 'chrome', 'glass', 'light', 'tail'], STYLE.edge_outline_px ?? 2.6), alpha: outlineAlpha },
   ])).toDataURL('image/png');
 
-  show(['wheel']);
+  show(['wheel', 'tyre', 'rim']);
   const wheels = shoot();
   // Резина тёмная, а диск должен читаться: спицы видно только по перепаду
   // между ступенями, своей линии у них нет — сбоку они сливаются в один круг.
   const wheelCanvas = flatten(grab(), { blur: px(0.0005), levels: [0.07, 0.32, 0.80] });
   // Контур колеса запекается в него же: колесо крутится отдельным спрайтом.
   wheelCanvas.getContext('2d').drawImage(
-    linesTo([{ mask: outlineFor(['wheel'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha }]),
+    linesTo([{ mask: outlineFor(['wheel', 'tyre', 'rim'], STYLE.edge_line_px ?? 1.6), alpha: lineAlpha }]),
     0, 0,
   );
-  show(['wheel']);
 
-  const bodyBox = bounds(body.pixels);
+  // Габарит считается по всем неподвижным слоям: у кузова после разделения
+  // на детали свой контур уже, чем у машины.
+  show(['body', 'trim', 'chrome', 'glass', 'light', 'tail']);
+  const whole = shoot();
+  const bodyBox = bounds(whole.pixels);
   const wheelBox = bounds(wheels.pixels);
 
   // Два колеса: делим кадр по середине машины и обмеряем каждую половину.
@@ -870,7 +914,7 @@ if (carId) {
     ...result.meta,
     // Порядок наложения. Колесо в списке не участвует: сцена рисует его
     // отдельно и с поворотом.
-    order: ['body', 'shade', 'glass', 'light', 'tail', 'edge'],
+    order: ['body', 'shade', 'trim', 'chrome', 'glass', 'light', 'tail', 'edge'],
   };
   writeFileSync(`${outDir}/layers.json`, JSON.stringify(manifest, null, 2));
   console.log(`  ${outDir}/layers.json`);

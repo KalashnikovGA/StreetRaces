@@ -169,6 +169,12 @@ function drawSpriteCar(
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
 
+  // Детали со своим цветом: чёрные окантовки, решётки, зеркало, бампера —
+  // и хром поверх них. Красится только кузов, поэтому они не уплывают
+  // вслед за окраской.
+  ctx.drawImage(images.trim, dx, dy, frameW, frameH);
+  ctx.drawImage(images.chrome, dx, dy, frameW, frameH);
+
   ctx.drawImage(images.glass, dx, dy, frameW, frameH);
   ctx.drawImage(images.light, dx, dy, frameW, frameH);
   ctx.drawImage(images.tail, dx, dy, frameW, frameH);
